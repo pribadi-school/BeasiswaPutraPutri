@@ -1,0 +1,39 @@
+{
+  "name": "beasiswa-putra-putri-daerah",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Pendaftaran Beasiswa Putra-Putri Daerah SD–SMP–SMA Pribadi Depok",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json",
+    "db:setup": "node scripts/db-setup.ts",
+    "db:admin-password": "node scripts/db-setup.ts --password-only",
+    "test": "vitest run",
+    "test:db": "vitest run tests/db"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.117.2",
+    "lucide-react": "^1.52.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router": "^8.4.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^26.6.4",
+    "@types/pg": "^8.23.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "dotenv": "^18.0.5",
+    "embedded-postgres": "^18.4.0-beta.17",
+    "pg": "^8.23.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
+  }
+}

@@ -1,0 +1,71 @@
+/*
+ * Token desain: design-system/sekolah-pribadi-depok/MASTER.md
+ * (sama dengan aplikasi janji temu). Palet bawaan Tailwind dihapus, jadi hanya
+ * warna merek di bawah yang ada. Isian/tombol biru memakai `action` (#0172bb),
+ * bukan `primary` (#18a8fa): putih di atas #18a8fa tidak lolos kontras AA.
+ */
+@import 'tailwindcss';
+
+@theme {
+  --color-*: initial;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --color-primary: #18a8fa;
+  --color-gradient-start: #0172bb;
+  --color-gradient-end: #01a6a1;
+  --color-accent: #f26522;
+  --color-foreground: #12233c;
+  --color-foreground-alt: #1c2733;
+  --color-muted-foreground: #5a6472;
+  --color-surface: #ffffff;
+  --color-surface-page: #f2f5f9;
+  --color-surface-muted: #e9eef5;
+  --color-border: rgba(18, 35, 60, 0.08);
+  --color-destructive: #dc2626;
+  --color-white: #ffffff;
+
+  --color-action: var(--color-gradient-start);
+  --color-action-hover: color-mix(in srgb, var(--color-gradient-start) 80%, var(--color-foreground));
+  --color-action-tint: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+  --color-border-strong: rgba(18, 35, 60, 0.2);
+  --color-destructive-tint: color-mix(in srgb, var(--color-destructive) 8%, var(--color-surface));
+  --color-accent-tint: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
+  --color-success: var(--color-gradient-end);
+  --color-success-tint: color-mix(in srgb, var(--color-gradient-end) 14%, var(--color-surface));
+  /* Teks oranye di atas putih: pakai versi gelap agar kontras cukup. */
+  --color-accent-text: color-mix(in srgb, var(--color-accent) 65%, var(--color-foreground));
+
+  --shadow-e4: 0 12px 32px -8px rgba(18, 35, 60, 0.22);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+}
+
+@layer base {
+  html { -webkit-tap-highlight-color: transparent; text-size-adjust: 100%; }
+  body {
+    background: var(--color-surface-page);
+    color: var(--color-foreground-alt);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 { color: var(--color-foreground); letter-spacing: -0.01em; }
+  :focus-visible { outline: 3px solid var(--color-action); outline-offset: 2px; border-radius: 6px; }
+  button:not(:disabled), [role='button'] { cursor: pointer; }
+}
+
+/* MASTER.md: gerak dimatikan (bukan sekadar dipercepat) untuk prefers-reduced-motion. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: white; }
+}

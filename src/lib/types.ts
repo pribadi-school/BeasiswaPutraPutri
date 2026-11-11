@@ -1,0 +1,93 @@
+/** Tipe data bersama. */
+
+export type Lang = 'id' | 'en';
+export type Level = 'sd' | 'smp' | 'sma';
+export type Status = 'pending' | 'lulus' | 'cadangan' | 'tidak_lulus';
+export const STATUSES: Status[] = ['pending', 'lulus', 'cadangan', 'tidak_lulus'];
+
+/** Isian formulir (semua string agar mudah dipakai di <input>). */
+export type Profile = {
+  level: Level | '';
+  fullName: string;
+  gender: 'L' | 'P' | '';
+  birthPlace: string;
+  birthDate: string; // yyyy-mm-dd
+  nisn: string;
+  province: string;
+  regency: string;
+  district: string;
+  address: string;
+  originSchool: string;
+  originClass: string;
+  parentName: string;
+  parentRelation: 'ayah' | 'ibu' | 'wali' | '';
+  parentPhone: string;
+  parentEmail: string;
+  parentJob: string;
+  incomeBand: 'lt1' | '1to3' | '3to5' | 'gt5' | '';
+  siblings: string;
+  achievements: string;
+  motivation: string;
+};
+
+export type Applicant = Profile & {
+  id: string;
+  username: string;
+  lang: Lang;
+  status: Status;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type Localized = { id: string; en: string };
+
+export type PublicSettings = {
+  now: string;
+  regOpen: boolean;
+  regDeadline: string | null;
+  announceAt: string | null;
+  released: boolean;
+  title: Localized | null;
+  body: Localized | null;
+};
+
+export type Me = {
+  applicant: Applicant;
+  canEdit: boolean;
+  released: boolean;
+  announceAt: string | null;
+  regDeadline: string | null;
+  now: string;
+  title: Localized | null;
+  body: Localized | null;
+  resultMessage: Localized | null;
+};
+
+export type AdminSettings = {
+  regOpen: boolean;
+  regDeadline: string | null;
+  announceAt: string | null;
+  title: Localized;
+  body: Localized;
+  resultMessages: Partial<Record<Exclude<Status, 'pending'>, Localized>>;
+};
+
+export type Credentials = { username: string; pin: string };
+
+/** Kesalahan yang bisa ditampilkan ke pengguna. `code` dipetakan ke teks di i18n. */
+export class AppError extends Error {
+  code: string;
+  field?: string;
+  constructor(code: string, field?: string) {
+    super(code);
+    this.code = code;
+    this.field = field;
+  }
+}
+
+export const emptyProfile = (): Profile => ({
+  level: '', fullName: '', gender: '', birthPlace: '', birthDate: '', nisn: '',
+  province: '', regency: '', district: '', address: '', originSchool: '', originClass: '',
+  parentName: '', parentRelation: '', parentPhone: '', parentEmail: '', parentJob: '',
+  incomeBand: '', siblings: '', achievements: '', motivation: '',
+});
