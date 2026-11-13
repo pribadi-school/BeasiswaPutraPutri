@@ -7,11 +7,11 @@ let h: Harness;
 let db: pg.Client;
 
 const profile = (over: Record<string, unknown> = {}) => ({
-  level: 'smp', full_name: 'Anak Tes Satu', gender: 'L', birth_place: 'Kupang', birth_date: '2012-05-04',
-  nisn: '', province: 'Nusa Tenggara Timur', regency: 'Kota Kupang', district: 'Oebobo', address: 'Jl. Contoh 1',
+  level: 'smp', full_name: 'Anak Tes Satu', gender: 'L', birth_place: 'Garut', birth_date: '2014-05-04',
+  nisn: '0012345678', province: 'Jawa Barat', regency: 'Kabupaten Garut', district: 'Tarogong', address: 'Jl. Contoh 1',
   origin_school: 'SDN Tes', origin_class: '6', parent_name: 'Orang Tua Tes', parent_relation: 'ibu',
-  parent_phone: '0812-3456-7890', parent_email: '', parent_job: 'Petani', income_band: '1to3', siblings: 2,
-  achievements: '', motivation: 'Ingin belajar.', ...over,
+  parent_phone: '0812-3456-7890', parent_email: 'ortu@example.com', parent_job: 'Petani', income_band: '1to3', siblings: 2,
+  achievements: 'Juara 1 lomba tes', motivation: 'Ingin belajar.', ...over,
 });
 
 type User = { sub: string; email: string } | null;
@@ -83,6 +83,21 @@ describe('masuk Google → isi data', () => {
     await fails(v, 'register', /INVALID:level/, JSON.stringify(profile({ full_name: 'D', level: 'univ' })), 'id');
     await fails(v, 'register', /INVALID:level/, JSON.stringify(profile({ full_name: 'D', level: 'sd' })), 'id');
     await fails(v, 'register', /INVALID:motivation/, JSON.stringify(profile({ full_name: 'E', motivation: ' ' })), 'id');
+    await fails(v, 'register', /INVALID:province/, JSON.stringify(profile({ full_name: 'F', province: 'Banten' })), 'id');
+    await fails(v, 'register', /INVALID:origin_class/, JSON.stringify(profile({ full_name: 'G', origin_class: '7' })), 'id');
+    await fails(v, 'register', /INVALID:origin_class/, JSON.stringify(profile({ full_name: 'G', level: 'sma', origin_class: '6' })), 'id');
+    await fails(v, 'register', /INVALID:nisn/, JSON.stringify(profile({ full_name: 'H', nisn: '' })), 'id');
+    await fails(v, 'register', /INVALID:parent_email/, JSON.stringify(profile({ full_name: 'H', parent_email: '' })), 'id');
+    await fails(v, 'register', /INVALID:achievements/, JSON.stringify(profile({ full_name: 'H', achievements: ' ' })), 'id');
+  });
+
+  it('penghasilan dan jumlah saudara kandung boleh kosong; SMA untuk kelas 9', async () => {
+    const w = newUser();
+    await call(w, 'register', JSON.stringify(profile({ full_name: 'Anak Opsional', level: 'sma', origin_class: '9', income_band: '', siblings: '' })), 'id');
+    const me = await call(w, 'me');
+    expect(me.applicant.incomeBand).toBeNull();
+    expect(me.applicant.siblings).toBeNull();
+    expect(me.applicant.originClass).toBe('9');
   });
 
   it('peserta bisa mengubah datanya sendiri, dan hanya miliknya', async () => {

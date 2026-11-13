@@ -19,6 +19,12 @@ Indonesia + Inggris.
 | `/akun` (sudah isi data) | Status, hitung mundur pengumuman, data pendaftaran (bisa diubah sampai batas waktu), lalu hasil |
 | `/admin` | Daftar pendaftar (cari, filter, detail), tetapkan status, hapus, ekspor CSV; atur pendaftaran dan pengumuman |
 
+- Peserta: **SMP** (sekarang kelas 6) atau **SMA** (sekarang kelas 9), dari
+  provinsi **Jawa Barat** saja. Aturan ini dijaga juga di database
+  (`private.clean_profile` dan constraint `applicants_scope_check`).
+- Semua isian wajib, kecuali **penghasilan keluarga** dan **jumlah saudara
+  kandung**. NISN (10 angka), email orang tua, dan prestasi juga wajib. Prestasi
+  boleh diisi "-" bila belum ada.
 - Satu akun Google untuk satu anak. Untuk mendaftarkan anak lain, gunakan
   akun Google lain.
 - Satu anak hanya bisa didaftarkan sekali, dilihat dari nama dan tanggal lahir.

@@ -8,6 +8,7 @@ import { AppError, STATUSES, type Applicant, type Level, type Status } from '../
 import { btnPrimary, btnSecondary, Card, ErrorBox, inputCls, StatCard, STATUS_STYLE, StatusBadge, useErrorText } from '../../components/ui';
 import { WelcomeBanner } from '../../components/WelcomeBanner';
 import { useAdmin } from './AdminPage';
+import { classLabel } from '../../lib/profileView';
 
 export function ApplicantsTab() {
   const { token, onExpired } = useAdmin();
@@ -128,7 +129,7 @@ function ApplicantRow(p: {
   const { a, lang } = p;
   const det: [TKey, string][] = [
     ['f.gender', t(`gender.${a.gender}` as TKey)], ['f.birthPlace', `${a.birthPlace}, ${formatDateOnly(a.birthDate, lang)}`], ['f.nisn', a.nisn || '—'],
-    ['f.address', `${a.address}, ${a.district}, ${a.regency}, ${a.province}`], ['f.originClass', a.originClass],
+    ['f.address', `${a.address}, ${a.district}, ${a.regency}, ${a.province}`], ['f.originClass', classLabel(a.originClass, t)],
     ['f.parentName', `${a.parentName} (${t(`rel.${a.parentRelation}` as TKey)})`], ['f.parentPhone', '+' + a.parentPhone],
     ['f.parentEmail', a.parentEmail || '—'], ['f.parentJob', a.parentJob],
     ['f.incomeBand', a.incomeBand ? t(`income.${a.incomeBand}` as TKey) : '—'], ['f.siblings', a.siblings || '—'],

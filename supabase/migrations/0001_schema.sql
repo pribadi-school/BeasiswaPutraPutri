@@ -76,6 +76,11 @@ create table if not exists private.applicants (
 -- Database yang dibuat sebelum SD dihapus: perbarui aturan jenjangnya.
 alter table private.applicants drop constraint if exists applicants_level_check;
 alter table private.applicants add constraint applicants_level_check check (level in ('smp', 'sma'));
+alter table private.applicants drop constraint if exists applicants_scope_check;
+alter table private.applicants add constraint applicants_scope_check check (
+  province = 'Jawa Barat'
+  and ((level = 'smp' and origin_class = '6') or (level = 'sma' and origin_class = '9'))
+  and nisn is not null and parent_email is not null and achievements is not null);
 
 -- Satu anak = satu pendaftaran.
 create unique index if not exists applicants_child_key
@@ -156,7 +161,7 @@ begin
   for k, v in select * from (values
     ('full_name','120'), ('birth_place','80'), ('province','60'), ('regency','80'),
     ('district','80'), ('address','300'), ('origin_school','120'), ('origin_class','30'),
-    ('parent_name','120'), ('parent_job','80'), ('motivation','1500')
+    ('parent_name','120'), ('parent_job','80'), ('achievements','1000'), ('motivation','1500')
   ) t(a, b) loop
     if btrim(coalesce(p->>k, '')) = '' or length(btrim(p->>k)) > v::int then
       perform private.invalid(k);
@@ -165,6 +170,14 @@ begin
   end loop;
 
   if (p->>'level') is null or (p->>'level') not in ('smp', 'sma') then perform private.invalid('level'); end if;
+  -- Program ini hanya untuk Jawa Barat.
+  if r->>'province' <> 'Jawa Barat' then perform private.invalid('province'); end if;
+  -- Kelas saat ini: 6 (mendaftar ke SMP) atau 9 (mendaftar ke SMA).
+  if r->>'origin_class' not in ('6', '9')
+     or (p->>'level' = 'smp' and r->>'origin_class' <> '6')
+     or (p->>'level' = 'sma' and r->>'origin_class' <> '9') then
+    perform private.invalid('origin_class');
+  end if;
   if (p->>'gender') is null or (p->>'gender') not in ('L', 'P') then perform private.invalid('gender'); end if;
   if (p->>'parent_relation') is null or (p->>'parent_relation') not in ('ayah', 'ibu', 'wali') then
     perform private.invalid('parent_relation');
@@ -186,15 +199,16 @@ begin
   phone := '62' || regexp_replace(phone, '^(\+?62|0)', '');
   r := r || jsonb_build_object('parent_phone', phone);
 
-  -- Opsional
+  -- NISN dan email orang tua: wajib.
   v := btrim(coalesce(p->>'nisn', ''));
-  if v <> '' and v !~ '^[0-9]{10}$' then perform private.invalid('nisn'); end if;
-  r := r || jsonb_build_object('nisn', nullif(v, ''));
+  if v !~ '^[0-9]{10}$' then perform private.invalid('nisn'); end if;
+  r := r || jsonb_build_object('nisn', v);
 
   v := btrim(coalesce(p->>'parent_email', ''));
-  if v <> '' and (v !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' or length(v) > 120) then perform private.invalid('parent_email'); end if;
-  r := r || jsonb_build_object('parent_email', nullif(v, ''));
+  if v !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' or length(v) > 120 then perform private.invalid('parent_email'); end if;
+  r := r || jsonb_build_object('parent_email', v);
 
+  -- Opsional: penghasilan dan jumlah saudara kandung.
   v := btrim(coalesce(p->>'income_band', ''));
   if v <> '' and v not in ('lt1', '1to3', '3to5', 'gt5') then perform private.invalid('income_band'); end if;
   r := r || jsonb_build_object('income_band', nullif(v, ''));
@@ -202,10 +216,6 @@ begin
   v := btrim(coalesce(p->>'siblings', ''));
   if v <> '' and (v !~ '^[0-9]{1,2}$' or v::int > 20) then perform private.invalid('siblings'); end if;
   r := r || jsonb_build_object('siblings', nullif(v, '')::int);
-
-  v := btrim(coalesce(p->>'achievements', ''));
-  if length(v) > 1000 then perform private.invalid('achievements'); end if;
-  r := r || jsonb_build_object('achievements', nullif(v, ''));
 
   return r;
 end $$;

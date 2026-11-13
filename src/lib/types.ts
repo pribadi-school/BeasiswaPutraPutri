@@ -91,7 +91,7 @@ export class AppError extends Error {
 
 export const emptyProfile = (): Profile => ({
   level: '', fullName: '', gender: '', birthPlace: '', birthDate: '', nisn: '',
-  province: '', regency: '', district: '', address: '', originSchool: '', originClass: '',
+  province: 'Jawa Barat', regency: '', district: '', address: '', originSchool: '', originClass: '',
   parentName: '', parentRelation: '', parentPhone: '', parentEmail: '', parentJob: '',
   incomeBand: '', siblings: '', achievements: '', motivation: '',
 });

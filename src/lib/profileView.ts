@@ -16,7 +16,7 @@ export function profileGroups(a: Applicant, t: T, lang: Lang): Group[] {
     { title: 'sec.origin', rows: [
       ['f.province', a.province], ['f.regency', a.regency], ['f.district', a.district], ['f.address', a.address],
     ] },
-    { title: 'sec.school', rows: [['f.originSchool', a.originSchool], ['f.originClass', a.originClass]] },
+    { title: 'sec.school', rows: [['f.originSchool', a.originSchool], ['f.originClass', classLabel(a.originClass, t)]] },
     { title: 'sec.parent', rows: [
       ['f.parentName', a.parentName], ['f.parentRelation', t(`rel.${a.parentRelation}` as TKey)],
       ['f.parentPhone', '+' + a.parentPhone], ['f.parentEmail', a.parentEmail || none], ['f.parentJob', a.parentJob],
@@ -28,10 +28,15 @@ export function profileGroups(a: Applicant, t: T, lang: Lang): Group[] {
   ];
 }
 
-/** Persentase isian yang terisi (wajib selalu terisi; sisanya isian opsional). */
+/** "6" → "Kelas 6 SD" / "Grade 6 (SD)". */
+export function classLabel(c: string, t: T): string {
+  return c === '6' || c === '9' ? t(`class.${c}` as TKey) : c;
+}
+
+/** Persentase isian yang terisi (19 isian wajib selalu terisi; penghasilan dan saudara kandung opsional). */
 export function completeness(a: Applicant): number {
-  const optional = [a.nisn, a.parentEmail, a.incomeBand, a.siblings, a.achievements];
-  const required = 16;
+  const optional = [a.incomeBand, a.siblings];
+  const required = 19;
   const filled = required + optional.filter((v) => String(v ?? '').trim() !== '').length;
   return Math.round((filled / (required + optional.length)) * 100);
 }

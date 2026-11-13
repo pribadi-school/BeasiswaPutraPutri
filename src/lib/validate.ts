@@ -11,10 +11,16 @@ const LIMITS: Partial<Record<keyof Profile, number>> = {
   achievements: 1000, parentEmail: 120,
 };
 
+/** Semua isian wajib, kecuali penghasilan dan jumlah saudara kandung. */
 const REQUIRED_TEXT: (keyof Profile)[] = [
   'fullName', 'birthPlace', 'province', 'regency', 'district', 'address',
-  'originSchool', 'originClass', 'parentName', 'parentJob', 'motivation',
+  'originSchool', 'originClass', 'parentName', 'parentJob', 'achievements', 'motivation',
 ];
+
+/** Program ini hanya untuk Jawa Barat. */
+export const PROVINCE = 'Jawa Barat';
+/** Kelas saat ini yang boleh mendaftar, sesuai jenjang tujuan. */
+export const CLASS_FOR_LEVEL = { smp: '6', sma: '9' } as const;
 
 /** 08…, 62… atau +62… → "62…". Mengembalikan null bila tidak valid. */
 export function normalizePhone(raw: string): string | null {
@@ -40,11 +46,12 @@ export function validateProfile(p: Profile): (keyof Profile)[] {
   if (!p.parentRelation) bad.push('parentRelation');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(p.birthDate) || p.birthDate < '1995-01-01' || p.birthDate > maxBirthDate()) bad.push('birthDate');
   if (!normalizePhone(p.parentPhone)) bad.push('parentPhone');
-  if (p.nisn.trim() && !/^\d{10}$/.test(p.nisn.trim())) bad.push('nisn');
+  if (p.province.trim() && p.province.trim() !== PROVINCE) bad.push('province');
+  if (p.originClass && (!p.level || p.originClass !== CLASS_FOR_LEVEL[p.level])) bad.push('originClass');
+  if (!/^\d{10}$/.test(p.nisn.trim())) bad.push('nisn');
   const email = p.parentEmail.trim();
-  if (email && (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || email.length > 120)) bad.push('parentEmail');
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || email.length > 120) bad.push('parentEmail');
   if (p.siblings.trim() && !/^\d{1,2}$/.test(p.siblings.trim())) bad.push('siblings');
-  if (p.achievements.trim().length > 1000) bad.push('achievements');
   return bad;
 }
 
