@@ -22,13 +22,25 @@ export function DashboardPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [formField, setFormField] = useState<string | null>(null);
   const a = me.applicant;
+  const notYet = !!me.regStart && Date.parse(me.regStart) > Date.parse(me.now);
 
   // Sudah masuk, belum mengisi data → sambutan + formulir pendaftaran.
   if (!a) {
     return (
       <div className="space-y-5">
-        <WelcomeBanner eyebrow={today(lang)} title={t('dash.welcomeNew')} subtitle={t('dash.subNew')} />
-        {!me.canEdit ? <ErrorBox>{t('e.CLOSED')}</ErrorBox> : (
+        <WelcomeBanner eyebrow={today(lang)} title={t('dash.welcomeNew')}
+          subtitle={me.canEdit ? t('dash.subNew') : notYet ? t('dash.subNotYet', { date: formatWib(me.regStart, lang) }) : undefined} />
+        {!me.canEdit ? (
+          notYet ? (
+            <section className="flex gap-3 rounded-lg bg-surface p-5 shadow-e2">
+              <CalendarClock size={24} className="mt-0.5 shrink-0 text-action" aria-hidden />
+              <div>
+                <h2 className="font-bold text-foreground">{t('dash.notYet.t')}</h2>
+                <p className="text-sm text-muted-foreground">{t('dash.notYet.d', { date: formatWib(me.regStart, lang) })}</p>
+              </div>
+            </section>
+          ) : <ErrorBox>{t('e.CLOSED')}</ErrorBox>
+        ) : (
           <>
             <div>
               <h2 className="text-xl font-bold">{t('reg.title')}</h2>

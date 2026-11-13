@@ -32,6 +32,12 @@ Indonesia + Inggris.
   mendaftar dan bisa diganti di *Data saya* sampai batas waktu. Aplikasi
   memeriksa isinya benar-benar PDF (diawali `%PDF-`). Supabase Storage
   menolak file selain PDF dan file di atas 10 MB.
+- **Jadwal pendaftaran**: dibuka **20 November 2026, 00.00 WIB** dan ditutup
+  **26 Desember 2026, 23.59 WIB**. Sebelum dibuka, orang tua bisa masuk
+  tetapi formulir belum tampil. Sesudah ditutup, data dan berkas tidak bisa
+  diubah. Jadwal ini dipasang sekali oleh migrasi, lalu diatur panitia di
+  **Admin → Pengaturan** (migrasi berikutnya tidak menimpanya). Waktu
+  pengumuman harus sesudah penutupan.
 - Satu akun Google untuk satu anak. Untuk mendaftarkan anak lain, gunakan
   akun Google lain.
 - Satu anak hanya bisa didaftarkan sekali, dilihat dari nama dan tanggal lahir.

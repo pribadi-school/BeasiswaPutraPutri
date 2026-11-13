@@ -18,9 +18,11 @@ export function HomePage() {
     { Icon: ClipboardList, t: t('home.step2.t'), d: t('home.step2.d') },
     { Icon: Megaphone, t: t('home.step3.t'), d: t('home.step3.d') },
   ];
+  const notYet = !!s?.regStart && Date.parse(s.regStart) > Date.parse(s.now);
   const info: string[] = !s ? [] : s.released ? [t('home.released')] : [
-    ...(!s.regOpen ? [t('home.closed')] : []),
-    ...(s.regDeadline ? [t('home.deadline', { date: formatWib(s.regDeadline, lang) })] : []),
+    ...(notYet ? [t('home.notYet', { date: formatWib(s.regStart, lang) })] : !s.regOpen ? [t('home.closed')] : []),
+    ...(s.regStart && s.regDeadline ? [t('home.schedule', { start: formatWib(s.regStart, lang, false), end: formatWib(s.regDeadline, lang) })]
+      : s.regDeadline ? [t('home.deadline', { date: formatWib(s.regDeadline, lang) })] : []),
     s.announceAt ? t('home.announceOn', { date: formatWib(s.announceAt, lang) }) : t('home.announceTbd'),
   ];
 

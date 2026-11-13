@@ -52,6 +52,8 @@ export type Localized = { id: string; en: string };
 export type PublicSettings = {
   now: string;
   regOpen: boolean;
+  /** Pendaftaran dibuka mulai (null = sejak sekarang). */
+  regStart: string | null;
   regDeadline: string | null;
   announceAt: string | null;
   released: boolean;
@@ -68,6 +70,8 @@ export type Me = {
   canEdit: boolean;
   released: boolean;
   announceAt: string | null;
+  /** Pendaftaran dibuka mulai (null = sejak sekarang). */
+  regStart: string | null;
   regDeadline: string | null;
   now: string;
   title: Localized | null;
@@ -79,6 +83,8 @@ export type Me = {
 
 export type AdminSettings = {
   regOpen: boolean;
+  /** Pendaftaran dibuka mulai (null = sejak sekarang). */
+  regStart: string | null;
   regDeadline: string | null;
   announceAt: string | null;
   title: Localized;
