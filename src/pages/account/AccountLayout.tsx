@@ -5,6 +5,7 @@ import { api } from '../../lib/api';
 import { useI18n, type TKey } from '../../lib/i18n';
 import { AppError, type AuthUser, type Me } from '../../lib/types';
 import { useCountdown } from '../../lib/useCountdown';
+import { clearAllDrafts } from '../../lib/draft';
 import { AppShell } from '../../components/AppShell';
 import { btnSecondary, ErrorBox, useErrorText } from '../../components/ui';
 
@@ -30,6 +31,7 @@ export function AccountLayout() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  // Sesi habis: draf TIDAK dihapus, supaya isian bisa dilanjutkan setelah masuk lagi.
   const expire = useCallback(() => {
     void api.signOut();
     navigate('/masuk', { replace: true, state: { expired: true } });
@@ -61,7 +63,7 @@ export function AccountLayout() {
   const sub = a ? `${a.fullName} · ${t(`level.${a.level}` as TKey)}` : user?.email;
 
   return (
-    <AppShell nav={nav} userName={name} userSub={sub} onLogout={() => { void api.signOut().then(() => navigate('/', { replace: true })); }}>
+    <AppShell nav={nav} userName={name} userSub={sub} onLogout={() => { clearAllDrafts(); void api.signOut().then(() => navigate('/', { replace: true })); }}>
       {error && !me ? (
         <div className="space-y-3"><ErrorBox>{error}</ErrorBox><button className={btnSecondary} onClick={() => void reload()}>{t('common.retry')}</button></div>
       ) : !me || !user ? (

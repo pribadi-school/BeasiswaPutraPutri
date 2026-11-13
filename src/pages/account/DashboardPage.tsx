@@ -7,6 +7,7 @@ import { completeness } from '../../lib/profileView';
 import { formatWib } from '../../lib/time';
 import { AppError, emptyProfile } from '../../lib/types';
 import { ProfileForm } from '../../components/ProfileForm';
+import { clearDraft, draftKeyFor } from '../../lib/draft';
 import { WelcomeBanner } from '../../components/WelcomeBanner';
 import { btnPill, ErrorBox, SectionHeader, StatCard, STATUS_STYLE, useErrorText } from '../../components/ui';
 import { useAccount } from './AccountLayout';
@@ -18,7 +19,7 @@ function today(lang: 'id' | 'en') {
 export function DashboardPage() {
   const { t, lang } = useI18n();
   const errText = useErrorText();
-  const { me, left, reload, expire, notice, setNotice } = useAccount();
+  const { user, me, left, reload, expire, notice, setNotice } = useAccount();
   const [formError, setFormError] = useState<string | null>(null);
   const [formField, setFormField] = useState<string | null>(null);
   const a = me.applicant;
@@ -48,12 +49,13 @@ export function DashboardPage() {
               <p className="mt-1 text-sm text-muted-foreground">{t('acc.oneAccount')}</p>
             </div>
             <ProfileForm
-              initial={emptyProfile()} withConsent withDocument submitLabel={t('reg.submit')} busyLabel={t('reg.sending')}
+              initial={emptyProfile()} withConsent withDocument stepped draftKey={draftKeyFor(user.email)} submitLabel={t('reg.submit')} busyLabel={t('reg.sending')}
               serverError={formError} serverField={formField}
               onSubmit={async (p, file) => {
                 setFormError(null); setFormField(null);
                 try {
                   await api.register(p, lang);
+                  clearDraft(draftKeyFor(user.email));
                   // Data sudah tersimpan; berkas menyusul. Gagal unggah ≠ gagal daftar.
                   let msg = t('reg.done');
                   if (file) {
@@ -89,10 +91,15 @@ export function DashboardPage() {
     { Icon: ShieldCheck, title: t('notice.privacy.t'), body: t('footer.privacy') },
   ];
 
+  const editLabel = me.canEdit ? t('dash.edit') : t('dash.view');
   const dataCards = [
-    { Icon: School, title: t('dash.cardChild'), lines: [a.fullName, `${t(`level.${a.level}` as TKey)} · ${a.originSchool}`] },
-    { Icon: Users, title: t('dash.cardParent'), lines: [a.parentName, '+' + a.parentPhone] },
-    { Icon: me.document ? FileText : FileWarning, title: t('doc.title'), lines: [me.document ? t('adm.docYes') : t('doc.none'), t('doc.short')] },
+    { Icon: School, title: t('dash.cardChild'), lines: [a.fullName, `${t(`level.${a.level}` as TKey)} · ${a.originSchool}`], cta: editLabel },
+    { Icon: Users, title: t('dash.cardParent'), lines: [a.parentName, '+' + a.parentPhone], cta: editLabel },
+    {
+      Icon: me.document ? FileText : FileWarning, title: t('doc.title'),
+      lines: [me.document ? t('adm.docYes') : t('doc.none'), t('doc.short')],
+      cta: !me.canEdit ? t('dash.view') : me.document ? t('doc.cta.replace') : t('doc.cta.upload'),
+    },
   ];
 
   return (
@@ -122,12 +129,12 @@ export function DashboardPage() {
             <SectionHeader title={t('dash.myData')}
               action={<Link to="/akun/data" className="inline-flex min-h-11 items-center font-semibold text-action hover:underline">{t('dash.seeAll')}</Link>} />
             <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
-              {dataCards.map(({ Icon, title, lines }, i) => (
+              {dataCards.map(({ Icon, title, lines, cta }, i) => (
                 <div key={title} className={`lift flex items-start gap-3 rounded-lg p-4 shadow-e2 ${i === 0 ? 'bg-surface ring-2 ring-action' : 'bg-action-tint'}`}>
                   <div className="min-w-0 flex-1">
                     <h3 className="font-bold text-action">{title}</h3>
                     {lines.map((l) => <p key={l} className="truncate text-sm text-foreground">{l}</p>)}
-                    <Link to="/akun/data" className={`${btnPill} mt-3`}>{me.canEdit ? t('dash.edit') : t('dash.view')}</Link>
+                    <Link to={i === 2 ? '/akun/data#berkas' : '/akun/data'} className={`${btnPill} mt-3`}>{cta}</Link>
                   </div>
                   <span className="flex size-14 shrink-0 items-center justify-center rounded-md bg-surface text-action shadow-e1"><Icon size={28} aria-hidden /></span>
                 </div>

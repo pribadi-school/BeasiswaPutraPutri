@@ -38,6 +38,10 @@ Indonesia + Inggris.
   diubah. Jadwal ini dipasang sekali oleh migrasi, lalu diatur panitia di
   **Admin → Pengaturan** (migrasi berikutnya tidak menimpanya). Waktu
   pengumuman harus sesudah penutupan.
+- **Formulir bertahap** (5 langkah, ada penanda kemajuan). Isian **tersimpan
+  otomatis di HP** sebagai draf, jadi tidak hilang kalau tab tertutup atau
+  sinyal putus. Berkas PDF tidak ikut disimpan. Demi privasi, draf dihapus
+  setelah pendaftaran terkirim dan saat menekan **Keluar**.
 - Satu akun Google untuk satu anak. Untuk mendaftarkan anak lain, gunakan
   akun Google lain.
 - Satu anak hanya bisa didaftarkan sekali, dilihat dari nama dan tanggal lahir.

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router';
 import { Pencil } from 'lucide-react';
 import { api } from '../../lib/api';
@@ -20,6 +20,10 @@ export function ProfilePage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [formField, setFormField] = useState<string | null>(null);
   const a = me.applicant;
+  // Dari kartu "Berkas kelengkapan" di Beranda: langsung ke bagian berkas.
+  useEffect(() => {
+    if (window.location.hash === '#berkas') document.getElementById('berkas')?.scrollIntoView({ block: 'start' });
+  }, []);
   if (!a) return <Navigate to="/akun" replace />;
 
   const head = (

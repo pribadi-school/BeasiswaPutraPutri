@@ -44,7 +44,7 @@ export function AppShell({ nav, userName, userSub, onLogout, children }: {
       {/* Sidebar (layar besar) */}
       <aside className="bg-sidebar-gradient sticky top-6 hidden h-[calc(100dvh-3rem)] w-64 shrink-0 flex-col rounded-lg p-5 text-white shadow-e2 lg:flex">
         <div className="mx-auto flex size-24 items-center justify-center rounded-lg bg-surface shadow-e2">
-          <img src="/pribadi-red.png" alt={t('app.school')} className="size-16 object-contain" />
+          <img src="/pribadi-logo.png" width={288} height={80} decoding="sync" alt={t('app.school')} className="size-16 object-contain" />
         </div>
         <p className="mt-3 text-center text-sm font-semibold leading-tight">{t('app.name')}</p>
         <nav aria-label="Menu" className="mt-8 flex flex-col gap-1">
@@ -66,7 +66,7 @@ export function AppShell({ nav, userName, userSub, onLogout, children }: {
         )}
         {/* Bar atas */}
         <header className="no-print flex items-center gap-3 px-4 py-3 lg:px-0 lg:pt-0">
-          <img src="/pribadi-red.png" alt="" className="size-10 shrink-0 object-contain lg:hidden" />
+          <img src="/pribadi-logo.png" width={288} height={80} decoding="sync" alt="" className="size-10 shrink-0 object-contain lg:hidden" />
           <div className="min-w-0 flex-1 lg:hidden">
             <div className="truncate text-sm font-bold leading-tight text-foreground">{t('app.name')}</div>
             <div className="truncate text-xs text-muted-foreground">{t('app.school')}</div>

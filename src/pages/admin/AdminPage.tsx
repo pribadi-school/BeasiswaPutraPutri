@@ -41,7 +41,7 @@ export function AdminPage() {
         <div className="w-full max-w-sm space-y-5">
           <div className="text-center">
             <span className="mx-auto flex size-20 items-center justify-center rounded-lg bg-surface shadow-e2">
-              <img src="/pribadi-red.png" alt={t('app.school')} className="size-14 object-contain" />
+              <img src="/pribadi-logo.png" width={288} height={80} decoding="sync" alt={t('app.school')} className="size-14 object-contain" />
             </span>
             <h1 className="mt-4 text-2xl font-extrabold">{t('adm.title')}</h1>
             {api.mode === 'demo' && <p className="mt-1 text-sm text-muted-foreground">{t('demo.banner')}</p>}

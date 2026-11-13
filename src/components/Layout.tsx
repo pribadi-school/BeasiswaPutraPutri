@@ -18,7 +18,7 @@ export function Layout() {
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-4">
           <Link to="/" className="flex min-w-0 flex-1 items-center gap-3">
             <span className="flex size-12 shrink-0 items-center justify-center rounded-md bg-surface shadow-e2">
-              <img src="/pribadi-red.png" alt="" className="size-9 object-contain" />
+              <img src="/pribadi-logo.png" width={288} height={80} decoding="sync" alt="" className="size-9 object-contain" />
             </span>
             <span className="min-w-0">
               <span className="block truncate text-base font-bold leading-tight text-foreground">{t('app.name')}</span>

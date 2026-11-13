@@ -97,7 +97,7 @@ export function DocumentPanel({ doc, canEdit, upload, getUrl }: {
   }
 
   return (
-    <section className="space-y-4 rounded-lg bg-surface p-5 shadow-e2" aria-labelledby="doc-title">
+    <section id="berkas" className="scroll-mt-4 space-y-4 rounded-lg bg-surface p-5 shadow-e2" aria-labelledby="doc-title">
       <h2 id="doc-title" className="font-bold text-action">{t('doc.title')}</h2>
       <div className={`flex flex-wrap items-center gap-3 rounded-sm border p-3 ${doc ? 'border-success bg-success-tint' : 'border-accent bg-accent-tint'}`}>
         {doc ? <FileText size={24} className="shrink-0 text-foreground" aria-hidden /> : <FileWarning size={24} className="shrink-0 text-foreground" aria-hidden />}
