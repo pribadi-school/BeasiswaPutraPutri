@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { AlertTriangle, CalendarClock, ChevronRight, ClipboardCheck, HelpCircle, Lock, ShieldCheck, Users, School } from 'lucide-react';
+import { AlertTriangle, CalendarClock, ChevronRight, ClipboardCheck, FileText, FileWarning, HelpCircle, Lock, ShieldCheck, Users, School } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useI18n, type TKey } from '../../lib/i18n';
 import { completeness } from '../../lib/profileView';
@@ -36,14 +36,19 @@ export function DashboardPage() {
               <p className="mt-1 text-sm text-muted-foreground">{t('acc.oneAccount')}</p>
             </div>
             <ProfileForm
-              initial={emptyProfile()} withConsent submitLabel={t('reg.submit')} busyLabel={t('reg.sending')}
+              initial={emptyProfile()} withConsent withDocument submitLabel={t('reg.submit')} busyLabel={t('reg.sending')}
               serverError={formError} serverField={formField}
-              onSubmit={async (p) => {
+              onSubmit={async (p, file) => {
                 setFormError(null); setFormField(null);
                 try {
                   await api.register(p, lang);
+                  // Data sudah tersimpan; berkas menyusul. Gagal unggah ≠ gagal daftar.
+                  let msg = t('reg.done');
+                  if (file) {
+                    try { await api.uploadDocument(file); } catch (e) { msg = t('doc.uploadFailed', { reason: errText(e) }); }
+                  }
                   await reload();
-                  setNotice(t('reg.done')); window.scrollTo({ top: 0 });
+                  setNotice(msg); window.scrollTo({ top: 0 });
                 } catch (e) {
                   if (e instanceof AppError && e.code === 'UNAUTHORIZED') return expire();
                   setFormError(errText(e));
@@ -61,7 +66,7 @@ export function DashboardPage() {
   const days = left === null ? null : Math.floor(left / 86_400_000);
   const announceValue = me.released ? t('dash.opened') : !me.announceAt ? t('dash.tbd')
     : days !== null && days >= 1 ? t('dash.daysLeft', { n: days }) : t('dash.hoursLeft');
-  const pct = completeness(a);
+  const pct = completeness(a, !!me.document);
 
   const notices: { Icon: typeof Lock; title: string; body: string }[] = [
     me.canEdit
@@ -75,11 +80,17 @@ export function DashboardPage() {
   const dataCards = [
     { Icon: School, title: t('dash.cardChild'), lines: [a.fullName, `${t(`level.${a.level}` as TKey)} · ${a.originSchool}`] },
     { Icon: Users, title: t('dash.cardParent'), lines: [a.parentName, '+' + a.parentPhone] },
+    { Icon: me.document ? FileText : FileWarning, title: t('doc.title'), lines: [me.document ? t('adm.docYes') : t('doc.none'), t('doc.short')] },
   ];
 
   return (
     <div className="space-y-6">
       {notice && <div role="status" className="rounded-sm border border-success bg-success-tint p-3 text-sm font-medium text-foreground">{notice}</div>}
+      {!me.document && me.canEdit && (
+        <Link to="/akun/data" className="flex items-center gap-3 rounded-sm border border-accent bg-accent-tint p-3 text-sm font-semibold text-foreground">
+          <FileWarning size={20} className="shrink-0" aria-hidden /> <span className="flex-1">{t('doc.missing')}</span> <ChevronRight size={18} aria-hidden />
+        </Link>
+      )}
       <WelcomeBanner eyebrow={today(lang)} title={t('dash.welcome', { name: a.parentName })} subtitle={t('dash.sub', { child: a.fullName })}>
         {me.released && <Link to="/akun/pengumuman" className="inline-flex min-h-11 items-center gap-1 rounded-full bg-surface px-5 text-sm font-semibold text-action shadow-e2">{t('res.title')} <ChevronRight size={16} aria-hidden /></Link>}
       </WelcomeBanner>
@@ -98,7 +109,7 @@ export function DashboardPage() {
           <section>
             <SectionHeader title={t('dash.myData')}
               action={<Link to="/akun/data" className="inline-flex min-h-11 items-center font-semibold text-action hover:underline">{t('dash.seeAll')}</Link>} />
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
               {dataCards.map(({ Icon, title, lines }, i) => (
                 <div key={title} className={`lift flex items-start gap-3 rounded-lg p-4 shadow-e2 ${i === 0 ? 'bg-surface ring-2 ring-action' : 'bg-action-tint'}`}>
                   <div className="min-w-0 flex-1">

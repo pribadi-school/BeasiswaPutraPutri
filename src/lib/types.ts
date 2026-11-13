@@ -31,7 +31,13 @@ export type Profile = {
   motivation: string;
 };
 
+/** Berkas kelengkapan (PDF) di Storage. */
+export type DocumentInfo = { size: number; uploadedAt: string };
+
 export type Applicant = Profile & {
+  /** Hanya untuk admin: id akun (lokasi berkas), info berkas. */
+  userId?: string;
+  document?: DocumentInfo | null;
   id: string;
   /** Email akun Google yang dipakai mendaftar. */
   email: string;
@@ -67,6 +73,8 @@ export type Me = {
   title: Localized | null;
   body: Localized | null;
   resultMessage: Localized | null;
+  /** Berkas kelengkapan milik sendiri (null = belum diunggah). */
+  document: DocumentInfo | null;
 };
 
 export type AdminSettings = {

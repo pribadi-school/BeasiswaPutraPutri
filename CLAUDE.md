@@ -8,7 +8,11 @@ perbarui semua salinannya.
 Aturan yang mudah terlewat:
 - Peserta masuk dengan Google (Supabase Auth). Fungsi peserta memakai
   `private.uid()` (claim `sub` dari JWT), dan hanya role `authenticated` yang
-  boleh memanggilnya. Admin masuk dengan password + token sesi (hash).
+  boleh memanggilnya. Admin = akun Supabase Auth (email + password) yang ada
+  di `private.admins` (per user_id, diisi `npm run db:admins`).
+- Berkas PDF di bucket Storage privat `berkas` (`<user_id>/kelengkapan.pdf`,
+  maks 10 MB, hanya PDF). Akses diatur policy Storage di file migrasi.
+  `tests/db/harness.ts` meniru schema `auth`/`storage` untuk mengujinya.
 - Keamanan dijaga di database (`supabase/migrations/0001_schema.sql`):
   schema `private` + RLS tanpa policy, semua akses lewat fungsi SECURITY
   DEFINER. Jangan dilemahkan dan jangan pernah memakai service_role key di browser.

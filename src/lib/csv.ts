@@ -16,6 +16,7 @@ const COLS: [string, (a: Applicant) => unknown][] = [
   ['Orang tua/wali', (a) => a.parentName], ['Hubungan', (a) => a.parentRelation], ['HP', (a) => a.parentPhone],
   ['Email', (a) => a.parentEmail], ['Pekerjaan', (a) => a.parentJob], ['Penghasilan', (a) => a.incomeBand],
   ['Saudara', (a) => a.siblings], ['Prestasi', (a) => a.achievements], ['Motivasi', (a) => a.motivation],
+  ['Berkas PDF', (a) => (a.document ? `ada (${Math.round(a.document.size / 1024)} KB)` : 'belum')],
 ];
 
 /** CSV dengan BOM agar Excel membaca UTF-8. */

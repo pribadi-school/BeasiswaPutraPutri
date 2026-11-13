@@ -10,9 +10,9 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json",
     "db:setup": "node scripts/db-setup.ts",
-    "db:admin-password": "node scripts/db-setup.ts --password-only",
     "test": "vitest run",
-    "test:db": "vitest run tests/db"
+    "test:db": "vitest run tests/db",
+    "db:admins": "node scripts/db-setup.ts --admins-only"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",

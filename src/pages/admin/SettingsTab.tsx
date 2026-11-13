@@ -27,7 +27,7 @@ function LocalizedInput({ idp, label, value, onChange, rows }: { idp: string; la
 }
 
 export function SettingsTab() {
-  const { token, onExpired } = useAdmin();
+  const { onExpired } = useAdmin();
   const { t } = useI18n();
   const errText = useErrorText();
   const [s, setS] = useState<AdminSettings | null>(null);
@@ -37,10 +37,10 @@ export function SettingsTab() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    api.adminGetSettings(token).then((r) => {
+    api.adminGetSettings().then((r) => {
       setS(r); setDeadline(toInputWib(r.regDeadline)); setAnnounce(toInputWib(r.announceAt));
     }).catch((e) => { if (e instanceof AppError && e.code === 'UNAUTHORIZED') onExpired(); else setError(errText(e)); });
-  }, [token, onExpired, errText]);
+  }, [onExpired, errText]);
 
   if (error && !s) return <ErrorBox>{error}</ErrorBox>;
   if (!s) return <p className="text-muted-foreground">{t('common.loading')}</p>;
@@ -50,7 +50,7 @@ export function SettingsTab() {
     if (!s) return;
     setError(null); setSaved(false);
     try {
-      await api.adminSaveSettings(token, { ...s, regDeadline: fromInputWib(deadline), announceAt: fromInputWib(announce) });
+      await api.adminSaveSettings({ ...s, regDeadline: fromInputWib(deadline), announceAt: fromInputWib(announce) });
       setSaved(true);
     } catch (e) {
       if (e instanceof AppError && e.code === 'UNAUTHORIZED') onExpired(); else setError(errText(e));

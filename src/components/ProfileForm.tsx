@@ -3,24 +3,30 @@ import { useI18n, type TKey } from '../lib/i18n';
 import type { Profile } from '../lib/types';
 import { CLASS_FOR_LEVEL, maxBirthDate, PROVINCE, validateProfile } from '../lib/validate';
 import { btnPrimary, Card, ErrorBox, Field, inputCls } from './ui';
+import { checkPdf } from '../lib/document';
+import { DocChecklist, PdfPicker } from './DocumentPanel';
 
 type Props = {
   initial: Profile;
   submitLabel: string;
   busyLabel: string;
   withConsent?: boolean;
+  /** Pendaftaran baru: minta berkas PDF kelengkapan sekaligus. */
+  withDocument?: boolean;
   serverError?: string | null;
   serverField?: string | null;
-  onSubmit: (p: Profile) => Promise<void>;
+  onSubmit: (p: Profile, document: File | null) => Promise<void>;
   onCancel?: () => void;
 };
 
-export function ProfileForm({ initial, submitLabel, busyLabel, withConsent, serverError, serverField, onSubmit, onCancel }: Props) {
+export function ProfileForm({ initial, submitLabel, busyLabel, withConsent, withDocument, serverError, serverField, onSubmit, onCancel }: Props) {
   const { t } = useI18n();
   const [p, setP] = useState<Profile>({ ...initial, province: PROVINCE });
   const [bad, setBad] = useState<Set<string>>(new Set());
   const [consent, setConsent] = useState(!withConsent);
   const [busy, setBusy] = useState(false);
+  const [doc, setDoc] = useState<File | null>(null);
+  const [docError, setDocError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
   const set = <K extends keyof Profile>(k: K, v: Profile[K]) => setP((x) => ({ ...x, [k]: v }));
@@ -45,6 +51,11 @@ export function ProfileForm({ initial, submitLabel, busyLabel, withConsent, serv
     e.preventDefault();
     const found = new Set<string>(validateProfile(p));
     if (!consent) found.add('consent');
+    if (withDocument) {
+      const problem = doc ? await checkPdf(doc) : 'MISSING';
+      setDocError(problem === 'MISSING' ? t('err.document') : problem ? t(`e.${problem}` as TKey) : null);
+      if (problem) found.add('document');
+    }
     setBad(found);
     if (found.size) {
       const first = formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]');
@@ -56,7 +67,7 @@ export function ProfileForm({ initial, submitLabel, busyLabel, withConsent, serv
       return;
     }
     setBusy(true);
-    try { await onSubmit(p); } finally { setBusy(false); }
+    try { await onSubmit(p, doc); } finally { setBusy(false); }
   }
 
   const text = (k: keyof Profile, label: TKey, opts: { type?: string; hint?: TKey; optional?: boolean; mode?: 'numeric' | 'tel' | 'email'; auto?: string } = {}) => (
@@ -143,6 +154,15 @@ export function ProfileForm({ initial, submitLabel, busyLabel, withConsent, serv
         {area('achievements', 'f.achievements', 'h.achievements', 3)}
         {area('motivation', 'f.motivation', 'h.motivation', 5)}
       </Card>
+
+      {withDocument && (
+        <Card className="space-y-4">
+          <h2 className="text-lg font-bold">{t('doc.title')}</h2>
+          <DocChecklist />
+          <PdfPicker id="document" file={doc} invalid={!!docError} onFile={(f) => { setDoc(f); setDocError(null); }} />
+          {docError && <p id="document-err" role="alert" className="text-sm font-medium text-destructive">{docError}</p>}
+        </Card>
+      )}
 
       {withConsent && (
         <div>

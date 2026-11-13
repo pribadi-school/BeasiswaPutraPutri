@@ -17,33 +17,52 @@ const profile = (over: Record<string, unknown> = {}) => ({
 type User = { sub: string; email: string } | null;
 const newUser = (email = `tes-${Math.random().toString(36).slice(2, 8)}@example.com`): User => ({ sub: randomUUID(), email });
 
-/** Memanggil fungsi seperti browser: role authenticated (atau anon) + JWT claims Supabase. */
-async function call(user: User | 'admin', fn: string, ...args: unknown[]) {
-  const ph = args.map((_, i) => `$${i + 1}`).join(',');
-  const claims = user && user !== 'admin' ? JSON.stringify({ sub: user.sub, email: user.email, role: 'authenticated' }) : '';
+/** Admin = akun Supabase (email + password) yang didaftarkan lewat set_admins. */
+const ADMIN = { sub: randomUUID(), email: 'panitia@pribadidepok.sch.id' };
+
+/** Menjalankan SQL seperti browser: role authenticated (atau anon) + JWT claims Supabase. */
+async function as<T>(user: User | 'admin', fn: () => Promise<T>): Promise<T> {
+  const u = user === 'admin' ? ADMIN : user;
+  const claims = u ? JSON.stringify({ sub: u.sub, email: u.email, role: 'authenticated' }) : '';
   await db.query(`select set_config('request.jwt.claims', $1, false)`, [claims]);
-  await db.query(user && user !== 'admin' ? 'set role authenticated' : 'set role anon');
+  await db.query(u ? 'set role authenticated' : 'set role anon');
   try {
-    const { rows } = await db.query(`select public.${fn}(${ph}) as r`, args);
-    return rows[0].r;
+    return await fn();
   } finally {
     await db.query('reset role');
   }
 }
+async function call(user: User | 'admin', fn: string, ...args: unknown[]) {
+  const ph = args.map((_, i) => `$${i + 1}`).join(',');
+  return as(user, async () => (await db.query(`select public.${fn}(${ph}) as r`, args)).rows[0].r);
+}
 const fails = (user: User | 'admin', fn: string, msg: RegExp, ...args: unknown[]) =>
   expect(call(user, fn, ...args)).rejects.toThrow(msg);
 
-let adminToken = '';
 const saveSettings = (announceAt: string | null, regOpen = true) =>
-  call('admin', 'admin_save_settings', adminToken, regOpen, null, announceAt,
+  call('admin', 'admin_save_settings', regOpen, null, announceAt,
     JSON.stringify({ id: 'Judul', en: 'Title' }), JSON.stringify({ id: 'Isi', en: 'Body' }),
     JSON.stringify({ lulus: { id: 'Selamat', en: 'Congrats' } }));
+
+/** Seperti Supabase Storage: menulis baris storage.objects sebagai pengguna (policy RLS berlaku). */
+const upload = (user: User, name: string, size = 123_456) =>
+  as(user, () => db.query(
+    `insert into storage.objects (bucket_id, name, metadata) values ('berkas', $1, $2)`,
+    [name, JSON.stringify({ size, mimetype: 'application/pdf' })],
+  ));
+const visible = async (user: User | 'admin') =>
+  (await as(user, () => db.query(`select name from storage.objects where bucket_id = 'berkas'`))).rows.map((r) => r.name);
+const pathOf = (u: User) => `${u!.sub}/kelengkapan.pdf`;
 
 beforeAll(async () => {
   h = await startDatabase();
   db = await h.connect();
-  await db.query(`select public.set_admin_password('password-admin-1')`);
-  adminToken = (await call('admin', 'admin_login', 'password-admin-1')).token;
+  await db.query(
+    `insert into auth.users (id, email, email_confirmed_at) values ($1, $2, now()), (gen_random_uuid(), 'belum.konfirmasi@example.com', null)`,
+    [ADMIN.sub, ADMIN.email],
+  );
+  const missing = (await db.query(`select public.set_admins($1) as r`, [[ADMIN.email, 'belum.konfirmasi@example.com', 'tidak.ada@example.com']])).rows[0].r;
+  expect(missing).toEqual(['belum.konfirmasi@example.com', 'tidak.ada@example.com']);
 }, 180_000);
 afterAll(async () => {
   await db.end();
@@ -65,6 +84,7 @@ describe('masuk Google → isi data', () => {
     expect(me.applicant.fullName).toBe('Anak Tes Satu');
     expect(me.applicant.email).toBe('ortu.satu@gmail.com');
     expect(me.applicant.parentPhone).toBe('6281234567890');
+    expect(me.document).toBeNull();
   });
 
   it('satu akun hanya satu pendaftaran', async () => {
@@ -117,16 +137,56 @@ describe('masuk Google → isi data', () => {
   });
 });
 
+describe('berkas kelengkapan (Storage)', () => {
+  const u = newUser();
+  const other = newUser();
+
+  it('bucket privat, khusus PDF, maks 10 MB', async () => {
+    const { rows } = await db.query(`select public, file_size_limit, allowed_mime_types from storage.buckets where id = 'berkas'`);
+    expect(rows[0]).toEqual({ public: false, file_size_limit: '10485760', allowed_mime_types: ['application/pdf'] });
+  });
+
+  it('belum mendaftar: belum boleh mengunggah', async () => {
+    await expect(upload(u, pathOf(u))).rejects.toThrow(/row-level security/);
+  });
+
+  it('setelah mendaftar: unggah hanya ke path miliknya sendiri', async () => {
+    await call(u, 'register', JSON.stringify(profile({ full_name: 'Anak Berkas' })), 'id');
+    await call(other, 'register', JSON.stringify(profile({ full_name: 'Anak Lain Berkas' })), 'id');
+    await upload(u, pathOf(u), 2_000_000);
+    await expect(upload(u, pathOf(other))).rejects.toThrow(/row-level security/);
+    await expect(upload(u, `${u!.sub}/lain.pdf`)).rejects.toThrow(/row-level security/);
+    expect((await call(u, 'me')).document.size).toBe(2_000_000);
+    expect((await call(other, 'me')).document).toBeNull();
+  });
+
+  it('peserta hanya melihat berkasnya sendiri; admin melihat semua', async () => {
+    expect(await visible(u)).toEqual([pathOf(u)]);
+    expect(await visible(other)).toEqual([]);
+    expect(await visible(null)).toEqual([]);
+    expect(await visible('admin')).toContain(pathOf(u));
+    const row = (await call('admin', 'admin_list')).find((x: { email: string }) => x.email === u!.email);
+    expect(row.userId).toBe(u!.sub);
+    expect(row.document.size).toBe(2_000_000);
+  });
+
+  it('setelah pendaftaran ditutup: tidak bisa mengunggah lagi', async () => {
+    await saveSettings(null, false);
+    await expect(upload(other, pathOf(other))).rejects.toThrow(/row-level security/);
+    await saveSettings(null, true);
+  });
+});
+
 describe('pengumuman', () => {
   const u = newUser();
   let id = '';
 
   it('hasil tidak terlihat sebelum waktunya, walau admin sudah menetapkan', async () => {
     await call(u, 'register', JSON.stringify(profile({ full_name: 'Anak Tes Tiga' })), 'id');
-    const list = await call('admin', 'admin_list', adminToken);
+    const list = await call('admin', 'admin_list');
     id = list.find((x: { email: string }) => x.email === u!.email).id;
     await saveSettings(new Date(Date.now() + 86_400_000).toISOString());
-    expect(await call('admin', 'admin_set_status', adminToken, `{${id}}`, 'lulus')).toBe(1);
+    expect(await call('admin', 'admin_set_status', `{${id}}`, 'lulus')).toBe(1);
 
     const me = await call(u, 'me');
     expect(me.released).toBe(false);
@@ -134,7 +194,7 @@ describe('pengumuman', () => {
     expect(me.body).toBeNull();
     expect(me.resultMessage).toBeNull();
     expect((await call(null, 'get_public_settings')).body).toBeNull();
-    expect((await call('admin', 'admin_list', adminToken)).find((x: { id: string }) => x.id === id).status).toBe('lulus');
+    expect((await call('admin', 'admin_list')).find((x: { id: string }) => x.id === id).status).toBe('lulus');
   });
 
   it('setelah waktunya tiba, hasil terlihat dan data terkunci', async () => {
@@ -151,23 +211,25 @@ describe('pengumuman', () => {
 });
 
 describe('keamanan', () => {
-  it('fungsi admin menolak tanpa token admin; salah password ditolak', async () => {
-    await fails('admin', 'admin_list', /UNAUTHORIZED/, 'ngawur');
-    await fails('admin', 'admin_set_status', /UNAUTHORIZED/, 'ngawur', '{}', 'lulus');
-    expect((await call('admin', 'admin_login', 'salah')).error).toBe('BAD_LOGIN');
+  it('fungsi admin menolak peserta biasa dan pengguna tanpa login', async () => {
+    const u = newUser();
+    await fails(u, 'admin_list', /UNAUTHORIZED/);
+    await fails(u, 'admin_set_status', /UNAUTHORIZED/, '{}', 'lulus');
+    await fails(null, 'admin_list', /permission denied/);
+    expect(await call(u, 'am_i_admin')).toBe(false);
+    expect(await call('admin', 'am_i_admin')).toBe(true);
   });
 
-  it('password admin tersimpan sebagai hash bcrypt', async () => {
-    const { rows } = await db.query(`select hash from private.secrets where key = 'admin_password'`);
-    expect(rows[0].hash).toMatch(/^\$2[aby]\$/);
+  it('email admin saja tidak cukup: harus akun (id) yang didaftarkan', async () => {
+    await fails({ sub: randomUUID(), email: ADMIN.email }, 'admin_list', /UNAUTHORIZED/);
   });
 
-  it('browser (anon/authenticated) tidak bisa membaca tabel private maupun fungsi internal', async () => {
+  it('browser (anon/authenticated) tidak bisa membaca tabel private, set_admins, maupun fungsi internal', async () => {
     for (const role of ['anon', 'authenticated']) {
       await db.query(`set role ${role}`);
       try {
         await expect(db.query('select * from private.applicants')).rejects.toThrow(/permission denied/);
-        await expect(db.query(`select public.set_admin_password('hackhackhack')`)).rejects.toThrow(/permission denied/);
+        await expect(db.query(`select public.set_admins(array['x@y.z'])`)).rejects.toThrow(/permission denied/);
         await expect(db.query(`select private.uid()`)).rejects.toThrow(/permission denied/);
       } finally {
         await db.query('reset role');

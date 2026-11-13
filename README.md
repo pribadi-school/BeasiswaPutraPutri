@@ -6,7 +6,7 @@ masuk kapan saja untuk melengkapi atau mengubah data sampai batas waktu, dan
 melihat hasil seleksi setelah waktu pengumuman tiba.
 
 Stack: React 19 + Vite + TypeScript, Tailwind v4 (design system sekolah di
-`design-system/`), Supabase (Postgres + Auth Google). Bahasa antarmuka:
+`design-system/`), Supabase (Postgres + Auth Google + Storage). Bahasa antarmuka:
 Indonesia + Inggris.
 
 ## Alur
@@ -15,9 +15,11 @@ Indonesia + Inggris.
 |---|---|
 | `/` | Penjelasan 3 langkah, batas pendaftaran, tanggal pengumuman |
 | `/masuk` | Tombol **Masuk dengan Google** |
-| `/akun` (belum isi data) | Formulir: data anak, asal daerah, sekolah asal, orang tua/wali, keterangan tambahan, persetujuan |
-| `/akun` (sudah isi data) | Status, hitung mundur pengumuman, data pendaftaran (bisa diubah sampai batas waktu), lalu hasil |
-| `/admin` | Daftar pendaftar (cari, filter, detail), tetapkan status, hapus, ekspor CSV; atur pendaftaran dan pengumuman |
+| `/akun` (belum isi data) | Formulir: data anak, asal daerah, sekolah asal, orang tua/wali, keterangan tambahan, **berkas PDF**, persetujuan |
+| `/akun` | Beranda: status, hitung mundur pengumuman, kelengkapan data, info penting |
+| `/akun/data` | Data pendaftaran dan berkas PDF (bisa diubah/diganti sampai batas waktu) |
+| `/akun/pengumuman` | Hasil seleksi setelah waktu pengumuman |
+| `/admin` | Daftar pendaftar (cari, filter, detail, **lihat PDF**), tetapkan status, hapus, ekspor CSV; `/admin/pengaturan` untuk pendaftaran dan pengumuman |
 
 - Peserta: **SMP** (sekarang kelas 6) atau **SMA** (sekarang kelas 9), dari
   provinsi **Jawa Barat** saja. Aturan ini dijaga juga di database
@@ -25,6 +27,11 @@ Indonesia + Inggris.
 - Semua isian wajib, kecuali **penghasilan keluarga** dan **jumlah saudara
   kandung**. NISN (10 angka), email orang tua, dan prestasi juga wajib. Prestasi
   boleh diisi "-" bila belum ada.
+- **Berkas kelengkapan**: SATU file PDF (maks 10 MB) berisi KTP orang
+  tua/wali, KK, rapor, dan sertifikat lomba/olimpiade (bila ada). Diminta saat
+  mendaftar dan bisa diganti di *Data saya* sampai batas waktu. Aplikasi
+  memeriksa isinya benar-benar PDF (diawali `%PDF-`). Supabase Storage
+  menolak file selain PDF dan file di atas 10 MB.
 - Satu akun Google untuk satu anak. Untuk mendaftarkan anak lain, gunakan
   akun Google lain.
 - Satu anak hanya bisa didaftarkan sekali, dilihat dari nama dan tanggal lahir.
@@ -32,7 +39,8 @@ Indonesia + Inggris.
   **Diproses** (belum diputuskan). Admin bisa menetapkan status kapan saja,
   tetapi peserta baru melihatnya setelah *waktu pengumuman*. Setelah waktu
   itu, data dikunci.
-- Admin masuk dengan password, bukan akun Google.
+- Admin (panitia) masuk dengan **email + password** akun Supabase yang
+  didaftarkan sekolah (lihat langkah 3), bukan akun Google.
 
 ## Menjalankan di komputer (mode demo)
 
@@ -49,7 +57,9 @@ berjalan dalam **mode demo**:
 
 - Semua data hanya tersimpan di browser itu.
 - "Masuk dengan Google" disimulasikan: ketik email apa saja.
-- Password admin: `demo`.
+- Admin: email apa saja, password `demo`.
+- PDF hanya disimpan di memori tab, jadi hilang saat halaman dimuat ulang.
+  Yang tetap tersimpan hanya ukuran dan waktunya.
 
 ## Memakai Supabase + Google (data sungguhan)
 
@@ -60,8 +70,9 @@ berjalan dalam **mode demo**:
    - `VITE_SUPABASE_URL` dan `VITE_SUPABASE_ANON_KEY`: Project Settings → API.
      **Anon key, bukan service_role.**
    - `SUPABASE_DB_URL`: Connect → *Session pooler* connection string.
-   - `ADMIN_PASSWORD`: minimal 8 karakter, sebaiknya panjang.
-3. Siapkan database (aman diulang, tidak menghapus pendaftar):
+   - `ADMIN_EMAILS`: email akun panitia, dipisah koma (lihat langkah 3).
+3. Siapkan database, bucket `berkas`, dan policy Storage (aman diulang, tidak
+   menghapus pendaftar):
    ```bash
    npm run db:setup
    ```
@@ -93,10 +104,28 @@ berjalan dalam **mode demo**:
 Client secret hanya disimpan di dashboard Supabase. Jangan menaruhnya di
 `.env` yang berawalan `VITE_`, di kode, atau di git.
 
-### 3. Password admin
+### 3. Akun panitia (admin)
 
-Untuk mengganti password admin: ubah `ADMIN_PASSWORD` di `.env`, lalu jalankan
-`npm run db:admin-password`. Semua sesi admin akan keluar.
+1. **Supabase → Authentication → Users → Add user → Create new user**:
+   isi email + password panitia, lalu centang *Auto Confirm User*. Ulangi
+   untuk tiap panitia.
+2. **Providers → Email** tetap aktif (untuk login panitia), tetapi matikan
+   *Allow new users to sign up*, sehingga orang lain tidak bisa membuat akun.
+3. Tulis email-email itu di `ADMIN_EMAILS` (`.env`), lalu jalankan:
+   ```bash
+   npm run db:admins
+   ```
+   Hanya akun yang terdaftar di sini yang bisa membuka `/admin` dan PDF
+   peserta. Akun ini dicocokkan berdasarkan id akun, bukan email saja. Untuk
+   mencabut akses, hapus emailnya dari `ADMIN_EMAILS`, lalu jalankan lagi.
+4. Ganti password panitia di **Authentication → Users**.
+
+### 4. Kapasitas penyimpanan
+
+Supabase gratis menyediakan sekitar 1 GB untuk Storage. Dengan file maksimal
+10 MB, kapasitas itu cukup untuk kira-kira 100 pendaftar bila semua
+mengunggah file terbesar (umumnya file PDF hasil pindai 1–3 MB). Pantau di
+**Storage** pada dashboard. Bila pendaftar banyak, naikkan paket Supabase.
 
 `.env` tidak boleh di-commit (sudah ada di `.gitignore`). Variabel tanpa
 awalan `VITE_` tidak boleh diberi awalan itu, karena isinya akan ikut terkirim
@@ -130,8 +159,17 @@ dijalankan oleh **database**, bukan oleh tampilan:
 - Sesi Google disimpan di `sessionStorage`, sehingga hilang saat tab
   ditutup. Ini lebih aman untuk HP yang dipakai bersama.
 - Aplikasi hanya memakai nama dan email akun Google.
-- Password admin disimpan sebagai hash bcrypt. Token sesi admin disimpan
-  sebagai hash, berlaku 8 jam. Admin terkunci 15 menit setelah 10 kali salah.
+- Berkas PDF (KTP, KK, rapor) adalah data paling sensitif. Berkas ada di
+  bucket Storage **privat** `berkas`, di `<id-akun>/kelengkapan.pdf`. Policy
+  Storage (di file migrasi) mengatur aksesnya:
+  - Peserta hanya bisa mengunggah dan membaca berkasnya sendiri, dan hanya
+    selama pendaftaran dibuka.
+  - Admin bisa membaca dan menghapus.
+  - File dibuka lewat tautan sementara yang berlaku 60 detik, tidak pernah
+    lewat tautan publik.
+- Admin adalah akun Supabase Auth yang terdaftar di `private.admins`.
+  Password panitia dikelola Supabase dan tidak pernah tersimpan di kode atau
+  `.env`.
 - Hasil (status dan pesan) tidak dikirim ke peserta sebelum `announce_at`.
 - Ekspor CSV berisi data pribadi. Sel yang bisa dibaca sebagai rumus Excel
   diberi petik di depannya. Simpan file ekspor dengan aman.
@@ -143,8 +181,9 @@ dijalankan oleh **database**, bukan oleh tampilan:
 |---|---|
 | `npm run dev` | server lokal |
 | `npm run build` | type-check + build produksi |
-| `npm run test:db` | uji database dengan Postgres sungguhan (embedded): pendaftaran per akun, isolasi antar akun, pengumuman, hak akses |
-| `npm run db:setup` | siapkan/perbarui database Supabase |
+| `npm run test:db` | uji database dengan Postgres sungguhan (embedded): pendaftaran per akun, isolasi antar akun, policy Storage berkas, pengumuman, hak admin |
+| `npm run db:setup` | siapkan/perbarui database, bucket, dan policy Supabase |
+| `npm run db:admins` | perbarui daftar akun panitia dari `ADMIN_EMAILS` |
 
 ## Mengubah aplikasi
 

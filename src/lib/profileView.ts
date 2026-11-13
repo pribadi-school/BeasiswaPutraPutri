@@ -33,10 +33,13 @@ export function classLabel(c: string, t: T): string {
   return c === '6' || c === '9' ? t(`class.${c}` as TKey) : c;
 }
 
-/** Persentase isian yang terisi (19 isian wajib selalu terisi; penghasilan dan saudara kandung opsional). */
-export function completeness(a: Applicant): number {
+/**
+ * Persentase kelengkapan: 19 isian wajib (selalu terisi), berkas PDF (wajib,
+ * bisa menyusul), serta penghasilan dan saudara kandung (opsional).
+ */
+export function completeness(a: Applicant, hasDocument: boolean): number {
   const optional = [a.incomeBand, a.siblings];
   const required = 19;
-  const filled = required + optional.filter((v) => String(v ?? '').trim() !== '').length;
-  return Math.round((filled / (required + optional.length)) * 100);
+  const filled = required + (hasDocument ? 1 : 0) + optional.filter((v) => String(v ?? '').trim() !== '').length;
+  return Math.round((filled / (required + 1 + optional.length)) * 100);
 }

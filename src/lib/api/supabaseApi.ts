@@ -18,6 +18,8 @@ const toApplicant = (r: Row): Applicant => ({
   parentPhone: str(r.parentPhone), parentEmail: str(r.parentEmail), parentJob: str(r.parentJob),
   incomeBand: (r.incomeBand ?? '') as Profile['incomeBand'], siblings: str(r.siblings),
   achievements: str(r.achievements), motivation: str(r.motivation),
+  userId: r.userId ? str(r.userId) : undefined,
+  document: (r.document as Applicant['document']) ?? null,
 });
 
 function fail(message: string): never {
@@ -47,9 +49,20 @@ export function createSupabaseApi(url: string, key: string): Api {
       fail(res.error.message);
     }
     const data = res.data as T & { error?: string };
-    // login / admin_login melaporkan kegagalan sebagai {error} (agar catatan gagal-login tersimpan).
-    if (data && typeof data === 'object' && 'error' in data && data.error) throw new AppError(String(data.error));
     return data;
+  }
+
+  const BUCKET = 'berkas';
+  const docPath = (userId: string) => `${userId}/kelengkapan.pdf`;
+  async function signedUrl(path: string): Promise<string> {
+    const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(path, 60);
+    if (error || !data) throw new AppError(/not found/i.test(error?.message ?? '') ? 'NOT_FOUND' : 'UNKNOWN');
+    return data.signedUrl;
+  }
+  async function currentUserId(): Promise<string> {
+    const id = (await sb.auth.getSession()).data.session?.user.id;
+    if (!id) throw new AppError('UNAUTHORIZED');
+    return id;
   }
 
   return {
@@ -82,14 +95,48 @@ export function createSupabaseApi(url: string, key: string): Api {
     },
     updateProfile: async (p) => { await rpc('update_profile', { p_profile: toPayload(p) }); },
 
-    adminLogin: async (pw) => (await rpc<{ token: string }>('admin_login', { p_password: pw })).token,
-    adminList: async (t) => (await rpc<Row[]>('admin_list', { p_token: t })).map(toApplicant),
-    adminGetSettings: (t) => rpc<AdminSettings>('admin_get_settings', { p_token: t }),
-    adminSaveSettings: (t, s) => rpc('admin_save_settings', {
-      p_token: t, p_reg_open: s.regOpen, p_reg_deadline: s.regDeadline, p_announce_at: s.announceAt,
+    async uploadDocument(file) {
+      const path = docPath(await currentUserId());
+      const { error } = await sb.storage.from(BUCKET).upload(path, file, { upsert: true, contentType: 'application/pdf', cacheControl: '0' });
+      if (error) {
+        const m = error.message;
+        if (/size|too large|payload/i.test(m)) throw new AppError('TOO_LARGE');
+        if (/mime|type/i.test(m)) throw new AppError('NOT_PDF');
+        if (/row-level security|unauthorized|policy/i.test(m)) throw new AppError('CLOSED');
+        fail(m);
+      }
+    },
+    documentUrl: async () => signedUrl(docPath(await currentUserId())),
+
+    async adminSignIn(email, password) {
+      const { error } = await sb.auth.signInWithPassword({ email: email.trim(), password });
+      if (error) throw new AppError(/fetch|network/i.test(error.message) ? 'NETWORK' : 'BAD_LOGIN');
+      if (!(await rpc<boolean>('am_i_admin'))) {
+        await sb.auth.signOut().catch(() => {});
+        throw new AppError('NOT_ADMIN');
+      }
+    },
+    async isAdmin() {
+      if (!(await sb.auth.getSession()).data.session) return false;
+      try { return await rpc<boolean>('am_i_admin'); } catch { return false; }
+    },
+    adminList: async () => (await rpc<Row[]>('admin_list')).map(toApplicant),
+    adminGetSettings: () => rpc<AdminSettings>('admin_get_settings'),
+    adminSaveSettings: (s) => rpc('admin_save_settings', {
+      p_reg_open: s.regOpen, p_reg_deadline: s.regDeadline, p_announce_at: s.announceAt,
       p_title: s.title, p_body: s.body, p_result_messages: s.resultMessages,
     }),
-    adminSetStatus: (t, ids, status) => rpc('admin_set_status', { p_token: t, p_ids: ids, p_status: status }),
-    adminDelete: (t, id) => rpc('admin_delete', { p_token: t, p_id: id }),
+    adminSetStatus: (ids, status) => rpc('admin_set_status', { p_ids: ids, p_status: status }),
+    async adminDocumentUrl(a) {
+      if (!a.userId) throw new AppError('NOT_FOUND');
+      return signedUrl(docPath(a.userId));
+    },
+    async adminDelete(a) {
+      if (a.userId && a.document) {
+        const { error } = await sb.storage.from(BUCKET).remove([docPath(a.userId)]);
+        if (error) fail(error.message);
+      }
+      await rpc('admin_delete', { p_id: a.id });
+    },
   };
 }

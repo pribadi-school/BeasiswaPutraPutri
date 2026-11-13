@@ -7,6 +7,7 @@ import { profileGroups } from '../../lib/profileView';
 import { formatWib } from '../../lib/time';
 import { AppError } from '../../lib/types';
 import { ProfileForm } from '../../components/ProfileForm';
+import { DocumentPanel } from '../../components/DocumentPanel';
 import { btnPill, useErrorText } from '../../components/ui';
 import { useAccount } from './AccountLayout';
 
@@ -76,6 +77,8 @@ export function ProfilePage() {
           </section>
         ))}
       </div>
+      <DocumentPanel doc={me.document} canEdit={me.canEdit}
+        upload={async (f) => { await api.uploadDocument(f); await reload(); }} getUrl={() => api.documentUrl()} />
       <p className="text-sm text-muted-foreground">{t('acc.updated', { date: formatWib(a.updatedAt, lang) })}</p>
     </div>
   );

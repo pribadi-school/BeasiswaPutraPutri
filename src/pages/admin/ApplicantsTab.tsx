@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Download, Trash2, Users } from 'lucide-react';
+import { Download, FileText, FileWarning, Trash2, Users } from 'lucide-react';
 import { api } from '../../lib/api';
 import { applicantsCsv, downloadCsv } from '../../lib/csv';
 import { useI18n, type TKey } from '../../lib/i18n';
@@ -8,10 +8,12 @@ import { AppError, STATUSES, type Applicant, type Level, type Status } from '../
 import { btnPrimary, btnSecondary, Card, ErrorBox, inputCls, StatCard, STATUS_STYLE, StatusBadge, useErrorText } from '../../components/ui';
 import { WelcomeBanner } from '../../components/WelcomeBanner';
 import { useAdmin } from './AdminPage';
+import { openInNewTab } from '../../components/DocumentPanel';
+import { formatSize } from '../../lib/document';
 import { classLabel } from '../../lib/profileView';
 
 export function ApplicantsTab() {
-  const { token, onExpired } = useAdmin();
+  const { onExpired } = useAdmin();
   const { t, lang } = useI18n();
   const errText = useErrorText();
   const [list, setList] = useState<Applicant[] | null>(null);
@@ -29,8 +31,8 @@ export function ApplicantsTab() {
   }, [onExpired, errText]);
 
   const load = useCallback(async () => {
-    try { setList(await api.adminList(token)); setError(null); } catch (e) { fail(e); }
-  }, [token, fail]);
+    try { setList(await api.adminList()); setError(null); } catch (e) { fail(e); }
+  }, [fail]);
   useEffect(() => { void load(); }, [load]);
 
   const shown = useMemo(() => {
@@ -50,7 +52,7 @@ export function ApplicantsTab() {
   async function applyBulk() {
     if (!bulk || !sel.size) return;
     try {
-      const n = await api.adminSetStatus(token, [...sel], bulk);
+      const n = await api.adminSetStatus([...sel], bulk);
       setNotice(t('adm.applied', { n })); setSel(new Set()); setBulk(''); await load();
     } catch (e) { fail(e); }
   }
@@ -100,7 +102,7 @@ export function ApplicantsTab() {
             <thead className="bg-action-tint text-foreground">
               <tr>
                 <th className="w-10 p-2"><input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all" className="size-5 accent-action" /></th>
-                {(['name', 'level', 'origin', 'school', 'created', 'status'] as const).map((c) => <th key={c} className="p-2 font-semibold">{t(`adm.col.${c}` as TKey)}</th>)}
+                {(['name', 'level', 'origin', 'school', 'created', 'doc', 'status'] as const).map((c) => <th key={c} className="p-2 font-semibold">{t(`adm.col.${c}` as TKey)}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -110,8 +112,10 @@ export function ApplicantsTab() {
                   onToggle={() => setOpen(open === a.id ? null : a.id)}
                   onDelete={async () => {
                     if (!window.confirm(t('adm.deleteConfirm', { name: a.fullName }))) return;
-                    try { await api.adminDelete(token, a.id); setOpen(null); await load(); } catch (e) { fail(e); }
-                  }} lang={lang} />
+                    try { await api.adminDelete(a); setOpen(null); await load(); } catch (e) { fail(e); }
+                  }}
+                  onView={async () => { setError(null); try { await openInNewTab(() => api.adminDocumentUrl(a)); } catch (e) { fail(e); } }}
+                  lang={lang} />
               ))}
             </tbody>
           </table>
@@ -123,7 +127,7 @@ export function ApplicantsTab() {
 
 function ApplicantRow(p: {
   a: Applicant; checked: boolean; expanded: boolean; lang: 'id' | 'en';
-  onCheck: () => void; onToggle: () => void; onDelete: () => void;
+  onCheck: () => void; onToggle: () => void; onDelete: () => void; onView: () => void;
 }) {
   const { t } = useI18n();
   const { a, lang } = p;
@@ -147,15 +151,25 @@ function ApplicantRow(p: {
         <td className="p-2">{a.regency}, {a.province}</td>
         <td className="p-2">{a.originSchool}</td>
         <td className="p-2 whitespace-nowrap">{formatWib(a.createdAt, lang, false)}</td>
+        <td className="p-2 whitespace-nowrap">
+          {a.document
+            ? <span className="inline-flex items-center gap-1 font-semibold text-foreground"><FileText size={16} className="text-action" aria-hidden /> {t('adm.docYes')}</span>
+            : <span className="inline-flex items-center gap-1 text-muted-foreground"><FileWarning size={16} className="text-accent-text" aria-hidden /> {t('adm.docNo')}</span>}
+        </td>
         <td className="p-2"><StatusBadge status={a.status} /></td>
       </tr>
       {p.expanded && (
-        <tr className="bg-surface-page">
-          <td colSpan={7} className="p-3">
+        <tr className="bg-surface-portal">
+          <td colSpan={8} className="p-3">
             <dl className="grid gap-x-6 gap-y-1 sm:grid-cols-2">
               {det.map(([k, v]) => <div key={k}><dt className="text-xs text-muted-foreground">{t(k)}</dt><dd className="whitespace-pre-line break-words">{v}</dd></div>)}
             </dl>
             <div className="mt-3 flex flex-wrap gap-2">
+              {a.document && (
+                <button onClick={p.onView} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-action px-4 text-sm font-semibold text-white">
+                  <FileText size={16} aria-hidden /> {t('doc.view')} · {formatSize(a.document.size)}
+                </button>
+              )}
               <button onClick={p.onDelete} className="inline-flex min-h-11 items-center gap-2 rounded-md border border-destructive px-4 text-sm font-semibold text-destructive">
                 <Trash2 size={16} aria-hidden /> {t('adm.delete')}
               </button>

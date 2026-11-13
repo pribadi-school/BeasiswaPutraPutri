@@ -1,36 +1,41 @@
-import { useCallback, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { Outlet, useNavigate, useOutletContext } from 'react-router';
 import { Settings, Users } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useI18n } from '../../lib/i18n';
-import { adminToken } from '../../lib/session';
 import { AppShell } from '../../components/AppShell';
 import { btnPrimary, ErrorBox, Field, inputCls, useErrorText } from '../../components/ui';
 
-export type AdminCtx = { token: string; onExpired: () => void };
+export type AdminCtx = { onExpired: () => void };
 export const useAdmin = () => useOutletContext<AdminCtx>();
 
 export function AdminPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const errText = useErrorText();
-  const [token, setToken] = useState<string | null>(adminToken.get());
+  // undefined = sedang memeriksa sesi; false = belum masuk sebagai panitia.
+  const [ok, setOk] = useState<boolean | undefined>(undefined);
+  const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const logout = useCallback(() => { adminToken.set(null); setToken(null); setPw(''); }, []);
+  useEffect(() => { api.isAdmin().then(setOk).catch(() => setOk(false)); }, []);
+
+  const logout = useCallback(() => { void api.signOut(); setOk(false); setPw(''); }, []);
 
   async function login(e: FormEvent) {
     e.preventDefault();
     setBusy(true); setError(null);
     try {
-      const tk = await api.adminLogin(pw);
-      adminToken.set(tk); setToken(tk); setPw('');
+      await api.adminSignIn(email, pw);
+      setOk(true); setPw('');
     } catch (err) { setError(errText(err)); } finally { setBusy(false); }
   }
 
-  if (!token) {
+  if (ok === undefined) return <main id="main" className="flex min-h-dvh items-center justify-center p-4 text-muted-foreground">{t('common.loading')}</main>;
+
+  if (!ok) {
     return (
       <main id="main" className="flex min-h-dvh items-center justify-center p-4">
         <div className="w-full max-w-sm space-y-5">
@@ -42,11 +47,14 @@ export function AdminPage() {
             {api.mode === 'demo' && <p className="mt-1 text-sm text-muted-foreground">{t('demo.banner')}</p>}
           </div>
           <form onSubmit={login} className="space-y-4 rounded-lg bg-surface p-6 shadow-e2">
+            <Field id="adminemail" label={t('adm.email')}>
+              <input id="adminemail" type="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} autoComplete="username" />
+            </Field>
             <Field id="adminpw" label={t('adm.password')}>
               <input id="adminpw" type="password" value={pw} onChange={(e) => setPw(e.target.value)} className={inputCls} autoComplete="current-password" />
             </Field>
             {error && <ErrorBox>{error}</ErrorBox>}
-            <button type="submit" disabled={busy || !pw} className={`${btnPrimary} w-full`}>{t('adm.login')}</button>
+            <button type="submit" disabled={busy || !pw || !email.trim()} className={`${btnPrimary} w-full`}>{t('adm.login')}</button>
           </form>
         </div>
       </main>
@@ -59,7 +67,7 @@ export function AdminPage() {
   ];
   return (
     <AppShell nav={nav} userName={t('adm.user')} userSub={t('adm.userSub')} onLogout={() => { logout(); navigate('/admin', { replace: true }); }}>
-      <Outlet context={{ token, onExpired: logout } satisfies AdminCtx} />
+      <Outlet context={{ onExpired: logout } satisfies AdminCtx} />
     </AppShell>
   );
 }

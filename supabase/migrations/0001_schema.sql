@@ -13,8 +13,14 @@
 --   * Peserta masuk dengan akun Google (Supabase Auth). Fungsi peserta
 --     mengenali pemiliknya dari JWT Supabase (claim `sub` = id pengguna),
 --     jadi satu akun Google hanya bisa melihat/mengubah datanya sendiri.
---   * Admin masuk dengan password (hash bcrypt) dan token sesi acak yang
---     disimpan sebagai hash; 10x salah = terkunci 15 menit.
+--   * Admin (panitia) masuk dengan akun Supabase (email + password) yang
+--     dibuat di dashboard. Hanya akun yang terdaftar di private.admins (per
+--     id pengguna, bukan per email) yang dianggap admin.
+--   * Berkas kelengkapan (PDF gabungan KTP, KK, rapor, sertifikat; maks 10 MB)
+--     ada di bucket Storage PRIVAT `berkas`, satu file per peserta di
+--     `<user_id>/kelengkapan.pdf`. Policy Storage: peserta hanya bisa
+--     menulis/membaca file miliknya (selama pendaftaran dibuka), admin bisa
+--     membaca dan menghapus. Browser hanya mendapat signed URL berumur pendek.
 --   * Hasil seleksi TIDAK dikirim ke peserta sebelum waktu pengumuman
 --     (announce_at); aturan ini dijaga di database, bukan di tampilan.
 -- =============================================================================
@@ -86,29 +92,22 @@ alter table private.applicants add constraint applicants_scope_check check (
 create unique index if not exists applicants_child_key
   on private.applicants (lower(btrim(full_name)), birth_date);
 
-create table if not exists private.sessions (
-  token_hash   text primary key,
-  role         text not null check (role in ('admin')),
-  expires_at   timestamptz not null
+-- Admin = pengguna Supabase Auth yang terdaftar di sini (dibuat lewat dashboard,
+-- lalu didaftarkan dengan `npm run db:admins`).
+create table if not exists private.admins (
+  user_id uuid primary key,
+  email   text not null
 );
 
-create table if not exists private.secrets (
-  key  text primary key,
-  hash text not null
-);
-
-create table if not exists private.login_failures (
-  key text not null,
-  at  timestamptz not null default now()
-);
-create index if not exists login_failures_key_at on private.login_failures (key, at);
+-- Sisa sistem login admin lama (password + token). Tidak dipakai lagi.
+drop table if exists private.sessions;
+drop table if exists private.secrets;
+drop table if exists private.login_failures;
 
 -- RLS aktif di semua tabel, tanpa policy = browser tidak punya akses sama sekali.
-alter table private.settings       enable row level security;
-alter table private.applicants     enable row level security;
-alter table private.sessions       enable row level security;
-alter table private.secrets        enable row level security;
-alter table private.login_failures enable row level security;
+alter table private.settings   enable row level security;
+alter table private.applicants enable row level security;
+alter table private.admins     enable row level security;
 revoke all on all tables in schema private from public;
 do $$ begin
   if exists (select 1 from pg_roles where rolname = 'anon') then
@@ -123,20 +122,19 @@ end $$;
 -- Fungsi bantu (private)
 -- -----------------------------------------------------------------------------
 
-create or replace function private.hash_secret(p text) returns text
-language sql volatile set search_path = '' as $$
-  select extensions.crypt(p, extensions.gen_salt('bf', 8))
-$$;
-
-create or replace function private.check_secret(p text, p_hash text) returns boolean
-language sql immutable set search_path = '' as $$
-  select p_hash is not null and extensions.crypt(coalesce(p, ''), p_hash) = p_hash
-$$;
-
-create or replace function private.token_hash(p text) returns text
-language sql immutable set search_path = '' as $$
-  select encode(extensions.digest(coalesce(p, ''), 'sha256'), 'hex')
-$$;
+-- Sisa login admin lama.
+drop function if exists public.admin_login(text);
+drop function if exists public.logout(text);
+drop function if exists public.set_admin_password(text);
+drop function if exists public.admin_list(text);
+drop function if exists public.admin_get_settings(text);
+drop function if exists public.admin_save_settings(text, boolean, timestamptz, timestamptz, jsonb, jsonb, jsonb);
+drop function if exists public.admin_set_status(text, uuid[], text);
+drop function if exists public.admin_delete(text, uuid);
+drop function if exists private.require_admin(text);
+drop function if exists private.hash_secret(text);
+drop function if exists private.check_secret(text, text);
+drop function if exists private.token_hash(text);
 
 create or replace function private.invalid(p_field text) returns void
 language plpgsql set search_path = '' as $$
@@ -243,13 +241,41 @@ language sql stable set search_path = '' as $$
   select lower(nullif(btrim(current_setting('request.jwt.claims', true)::jsonb ->> 'email'), ''))
 $$;
 
-create or replace function private.require_admin(p_token text) returns void
-language plpgsql security definer set search_path = '' as $$
+create or replace function private.is_admin() returns boolean
+language plpgsql stable security definer set search_path = '' as $$
+declare v uuid;
 begin
-  if not exists (select 1 from private.sessions
-                  where token_hash = private.token_hash(p_token) and role = 'admin' and expires_at > now()) then
-    raise exception 'UNAUTHORIZED' using errcode = 'P0001';
-  end if;
+  begin
+    v := nullif(current_setting('request.jwt.claims', true)::jsonb ->> 'sub', '')::uuid;
+  exception when others then v := null;
+  end;
+  return v is not null and exists (select 1 from private.admins where user_id = v);
+end $$;
+
+create or replace function private.require_admin() returns void
+language plpgsql stable security definer set search_path = '' as $$
+begin
+  if not private.is_admin() then raise exception 'UNAUTHORIZED' using errcode = 'P0001'; end if;
+end $$;
+
+-- Lokasi berkas kelengkapan seorang peserta di bucket `berkas`.
+create or replace function private.document_path(p_user uuid) returns text
+language sql immutable set search_path = '' as $$
+  select p_user::text || '/kelengkapan.pdf'
+$$;
+
+-- {size, uploadedAt} berkas di Storage, atau null bila belum diunggah.
+create or replace function private.document_info(p_user uuid) returns json
+language plpgsql stable security definer set search_path = '' as $$
+declare r json;
+begin
+  select json_build_object('size', (o.metadata ->> 'size')::bigint, 'uploadedAt', coalesce(o.updated_at, o.created_at))
+    into r
+    from storage.objects o
+   where o.bucket_id = 'berkas' and o.name = private.document_path(p_user);
+  return r;
+exception when undefined_table or invalid_schema_name then
+  return null;
 end $$;
 
 -- Boleh mendaftar/mengubah data sekarang?
@@ -275,10 +301,11 @@ language sql stable set search_path = '' as $$
     'achievements', a.achievements, 'motivation', a.motivation)
 $$;
 
--- Versi admin: status asli selalu terlihat.
+-- Versi admin: status asli selalu terlihat, plus id akun dan info berkas.
 create or replace function private.applicant_admin_json(a private.applicants) returns json
 language sql stable set search_path = '' as $$
-  select (private.applicant_json(a)::jsonb || jsonb_build_object('status', a.status))::json
+  select (private.applicant_json(a)::jsonb || jsonb_build_object(
+    'status', a.status, 'userId', a.user_id, 'document', private.document_info(a.user_id)))::json
 $$;
 
 -- -----------------------------------------------------------------------------
@@ -338,11 +365,6 @@ begin
   return json_build_object('ok', true);
 end $$;
 
-create or replace function public.logout(p_token text) returns void
-language sql security definer set search_path = '' as $$
-  delete from private.sessions where token_hash = private.token_hash(p_token)
-$$;
-
 -- Profil + status. Hasil (status) hanya setelah pengumuman dibuka; begitu juga
 -- pesan per status.
 create or replace function public.me() returns json
@@ -362,7 +384,8 @@ begin
     'now', now(),
     'title', case when private.released() then s.announce_title end,
     'body', case when private.released() then s.announce_body end,
-    'resultMessage', case when private.released() and a.id is not null then s.result_messages -> a.status end);
+    'resultMessage', case when private.released() and a.id is not null then s.result_messages -> a.status end,
+    'document', case when a.id is null then null else private.document_info(a.user_id) end);
 end $$;
 
 create or replace function public.update_profile(p_profile jsonb) returns void
@@ -393,54 +416,67 @@ begin
 end $$;
 
 -- -----------------------------------------------------------------------------
--- Fungsi publik — admin
+-- Fungsi untuk policy Storage (dipanggil sebagai pengguna yang masuk)
 -- -----------------------------------------------------------------------------
 
-create or replace function public.admin_login(p_password text) returns json
-language plpgsql security definer set search_path = '' as $$
-declare
-  v_hash  text;
-  v_token text := encode(extensions.gen_random_bytes(32), 'hex');
+-- Path berkas milik pengguna yang sedang masuk (null bila belum masuk).
+create or replace function public.my_document_path() returns text
+language plpgsql stable security definer set search_path = '' as $$
+declare v uuid;
 begin
-  if (select count(*) from private.login_failures where key = 'admin' and at > now() - interval '15 minutes') >= 10 then
-    return json_build_object('error', 'LOCKED');
-  end if;
-  select hash into v_hash from private.secrets where key = 'admin_password';
-  if v_hash is null then return json_build_object('error', 'ADMIN_NOT_SET'); end if;
-  if not private.check_secret(p_password, v_hash) then
-    insert into private.login_failures (key) values ('admin');
-    return json_build_object('error', 'BAD_LOGIN');
-  end if;
-  delete from private.sessions where expires_at < now();
-  insert into private.sessions (token_hash, role, expires_at)
-    values (private.token_hash(v_token), 'admin', now() + interval '8 hours');
-  return json_build_object('token', v_token);
+  begin
+    v := nullif(current_setting('request.jwt.claims', true)::jsonb ->> 'sub', '')::uuid;
+  exception when others then v := null;
+  end;
+  return case when v is null then null else private.document_path(v) end;
 end $$;
 
-create or replace function public.admin_list(p_token text) returns json
+-- Boleh mengunggah/mengganti berkas sekarang? (sudah mendaftar + pendaftaran dibuka)
+create or replace function public.document_upload_allowed() returns boolean
+language plpgsql stable security definer set search_path = '' as $$
+declare v uuid;
+begin
+  begin
+    v := nullif(current_setting('request.jwt.claims', true)::jsonb ->> 'sub', '')::uuid;
+  exception when others then v := null;
+  end;
+  return v is not null and private.registration_open()
+     and exists (select 1 from private.applicants where user_id = v);
+end $$;
+
+create or replace function public.am_i_admin() returns boolean
+language sql stable security definer set search_path = '' as $$
+  select private.is_admin()
+$$;
+
+-- -----------------------------------------------------------------------------
+-- Fungsi publik — admin (akun Supabase yang terdaftar di private.admins)
+-- -----------------------------------------------------------------------------
+
+create or replace function public.admin_list() returns json
 language plpgsql stable security definer set search_path = '' as $$
 begin
-  perform private.require_admin(p_token);
+  perform private.require_admin();
   return coalesce((select json_agg(private.applicant_admin_json(a) order by a.created_at) from private.applicants a), '[]'::json);
 end $$;
 
-create or replace function public.admin_get_settings(p_token text) returns json
+create or replace function public.admin_get_settings() returns json
 language plpgsql stable security definer set search_path = '' as $$
 declare s private.settings;
 begin
-  perform private.require_admin(p_token);
+  perform private.require_admin();
   select * into s from private.settings where id = 1;
   return json_build_object('regOpen', s.reg_open, 'regDeadline', s.reg_deadline, 'announceAt', s.announce_at,
     'title', s.announce_title, 'body', s.announce_body, 'resultMessages', s.result_messages, 'now', now());
 end $$;
 
 create or replace function public.admin_save_settings(
-  p_token text, p_reg_open boolean, p_reg_deadline timestamptz, p_announce_at timestamptz,
+  p_reg_open boolean, p_reg_deadline timestamptz, p_announce_at timestamptz,
   p_title jsonb, p_body jsonb, p_result_messages jsonb
 ) returns void
 language plpgsql security definer set search_path = '' as $$
 begin
-  perform private.require_admin(p_token);
+  perform private.require_admin();
   if jsonb_typeof(p_title) <> 'object' or jsonb_typeof(p_body) <> 'object' or jsonb_typeof(p_result_messages) <> 'object' then
     perform private.invalid('settings');
   end if;
@@ -452,36 +488,78 @@ begin
   where id = 1;
 end $$;
 
-create or replace function public.admin_set_status(p_token text, p_ids uuid[], p_status text) returns int
+create or replace function public.admin_set_status(p_ids uuid[], p_status text) returns int
 language plpgsql security definer set search_path = '' as $$
 declare n int;
 begin
-  perform private.require_admin(p_token);
+  perform private.require_admin();
   if p_status not in ('pending', 'lulus', 'cadangan', 'tidak_lulus') then perform private.invalid('status'); end if;
   update private.applicants set status = p_status where id = any(p_ids);
   get diagnostics n = row_count;
   return n;
 end $$;
 
-create or replace function public.admin_delete(p_token text, p_id uuid) returns void
+-- Berkas di Storage dihapus oleh aplikasi admin lewat Storage API sebelum ini dipanggil.
+create or replace function public.admin_delete(p_id uuid) returns void
 language plpgsql security definer set search_path = '' as $$
 begin
-  perform private.require_admin(p_token);
+  perform private.require_admin();
   delete from private.applicants where id = p_id;
 end $$;
 
-create or replace function public.set_admin_password(p_password text) returns void
+-- Menetapkan daftar admin dari email akun Supabase yang SUDAH ada dan sudah
+-- terkonfirmasi. Hanya untuk `npm run db:admins` (tidak bisa dipanggil browser).
+-- Mengembalikan email yang tidak ditemukan.
+create or replace function public.set_admins(p_emails text[]) returns text[]
 language plpgsql security definer set search_path = '' as $$
+declare missing text[];
 begin
-  if length(coalesce(p_password, '')) < 8 then perform private.invalid('password'); end if;
-  insert into private.secrets (key, hash) values ('admin_password', private.hash_secret(p_password))
-    on conflict (key) do update set hash = excluded.hash;
-  delete from private.sessions where role = 'admin';
+  select coalesce(array_agg(e), '{}') into missing
+    from unnest(p_emails) e
+   where not exists (select 1 from auth.users u where lower(u.email) = lower(btrim(e)) and u.email_confirmed_at is not null);
+  delete from private.admins;
+  insert into private.admins (user_id, email)
+    select u.id, lower(u.email) from auth.users u
+     where u.email_confirmed_at is not null and lower(u.email) in (select lower(btrim(e)) from unnest(p_emails) e);
+  return missing;
+end $$;
+
+-- -----------------------------------------------------------------------------
+-- Storage: bucket privat `berkas` (PDF, maks 10 MB) + policy
+-- -----------------------------------------------------------------------------
+do $$
+begin
+  if not exists (select 1 from pg_namespace where nspname = 'storage') then
+    raise notice 'Schema storage tidak ada (bukan Supabase): bucket dilewati.';
+    return;
+  end if;
+
+  insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+  values ('berkas', 'berkas', false, 10485760, array['application/pdf'])
+  on conflict (id) do update set public = false, file_size_limit = excluded.file_size_limit,
+    allowed_mime_types = excluded.allowed_mime_types;
+
+  drop policy if exists "berkas: peserta unggah miliknya" on storage.objects;
+  create policy "berkas: peserta unggah miliknya" on storage.objects for insert to authenticated
+    with check (bucket_id = 'berkas' and name = public.my_document_path() and public.document_upload_allowed());
+
+  drop policy if exists "berkas: peserta ganti miliknya" on storage.objects;
+  create policy "berkas: peserta ganti miliknya" on storage.objects for update to authenticated
+    using (bucket_id = 'berkas' and name = public.my_document_path() and public.document_upload_allowed())
+    with check (bucket_id = 'berkas' and name = public.my_document_path() and public.document_upload_allowed());
+
+  drop policy if exists "berkas: baca milik sendiri atau admin" on storage.objects;
+  create policy "berkas: baca milik sendiri atau admin" on storage.objects for select to authenticated
+    using (bucket_id = 'berkas' and (name = public.my_document_path() or public.am_i_admin()));
+
+  drop policy if exists "berkas: hapus oleh pemilik atau admin" on storage.objects;
+  create policy "berkas: hapus oleh pemilik atau admin" on storage.objects for delete to authenticated
+    using (bucket_id = 'berkas' and ((name = public.my_document_path() and public.document_upload_allowed()) or public.am_i_admin()));
 end $$;
 
 -- -----------------------------------------------------------------------------
 -- Hak akses: browser hanya boleh memanggil fungsi publik yang disengaja.
--- Fungsi peserta hanya untuk pengguna yang sudah masuk (role authenticated).
+-- Fungsi peserta dan admin hanya untuk pengguna yang sudah masuk (authenticated).
 -- -----------------------------------------------------------------------------
 -- Versi lama (username + PIN) dibuang.
 drop function if exists public.login(text, text);
@@ -493,25 +571,31 @@ drop function if exists private.new_username();
 drop function if exists private.new_pin();
 
 revoke all on all functions in schema private from public;
-revoke all on function public.set_admin_password(text) from public;
-revoke all on function public.register(jsonb, text), public.me(), public.update_profile(jsonb) from public;
+revoke all on function public.set_admins(text[]) from public;
+revoke all on function
+  public.register(jsonb, text), public.me(), public.update_profile(jsonb),
+  public.my_document_path(), public.document_upload_allowed(), public.am_i_admin(),
+  public.admin_list(), public.admin_get_settings(),
+  public.admin_save_settings(boolean, timestamptz, timestamptz, jsonb, jsonb, jsonb),
+  public.admin_set_status(uuid[], text), public.admin_delete(uuid)
+from public;
 do $$
 declare r text;
 begin
   foreach r in array array['anon', 'authenticated'] loop
     if exists (select 1 from pg_roles where rolname = r) then
       execute format('revoke all on all functions in schema private from %I', r);
-      execute format('revoke all on function public.set_admin_password(text) from %I', r);
-      execute format('revoke all on function public.register(jsonb, text), public.me(), public.update_profile(jsonb) from %I', r);
-      execute format('grant execute on function
-        public.get_public_settings(), public.logout(text),
-        public.admin_login(text), public.admin_list(text), public.admin_get_settings(text),
-        public.admin_save_settings(text, boolean, timestamptz, timestamptz, jsonb, jsonb, jsonb),
-        public.admin_set_status(text, uuid[], text), public.admin_delete(text, uuid)
-        to %I', r);
+      execute format('revoke all on function public.set_admins(text[]) from %I', r);
+      execute format('grant execute on function public.get_public_settings() to %I', r);
     end if;
   end loop;
   if exists (select 1 from pg_roles where rolname = 'authenticated') then
-    grant execute on function public.register(jsonb, text), public.me(), public.update_profile(jsonb) to authenticated;
+    grant execute on function
+      public.register(jsonb, text), public.me(), public.update_profile(jsonb),
+      public.my_document_path(), public.document_upload_allowed(), public.am_i_admin(),
+      public.admin_list(), public.admin_get_settings(),
+      public.admin_save_settings(boolean, timestamptz, timestamptz, jsonb, jsonb, jsonb),
+      public.admin_set_status(uuid[], text), public.admin_delete(uuid)
+    to authenticated;
   end if;
 end $$;
