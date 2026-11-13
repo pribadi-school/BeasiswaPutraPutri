@@ -10,10 +10,11 @@
 --     tidak pernah dibuka ke browser. Tidak ada tabel publik sama sekali.
 --   * Browser hanya memanggil fungsi Postgres di bawah. Fungsi itu memeriksa
 --     input, lalu menulis/membaca tabel private (SECURITY DEFINER).
---   * PIN peserta dan password admin disimpan sebagai hash bcrypt (lambat
---     dengan sengaja), tidak pernah sebagai teks.
---   * Login memakai token sesi acak (disimpan sebagai hash). Salah PIN
---     dibatasi per username: 5x gagal = terkunci 15 menit.
+--   * Peserta masuk dengan akun Google (Supabase Auth). Fungsi peserta
+--     mengenali pemiliknya dari JWT Supabase (claim `sub` = id pengguna),
+--     jadi satu akun Google hanya bisa melihat/mengubah datanya sendiri.
+--   * Admin masuk dengan password (hash bcrypt) dan token sesi acak yang
+--     disimpan sebagai hash; 10x salah = terkunci 15 menit.
 --   * Hasil seleksi TIDAK dikirim ke peserta sebelum waktu pengumuman
 --     (announce_at); aturan ini dijaga di database, bukan di tampilan.
 -- =============================================================================
@@ -41,8 +42,8 @@ insert into private.settings (id) values (1) on conflict do nothing;
 
 create table if not exists private.applicants (
   id            uuid primary key default gen_random_uuid(),
-  username      text not null unique,
-  pin_hash      text not null,
+  user_id       uuid not null unique,     -- auth.users.id (akun Google)
+  email         text not null,
   status        text not null default 'pending'
                 check (status in ('pending', 'lulus', 'cadangan', 'tidak_lulus')),
   lang          text not null default 'id' check (lang in ('id', 'en')),
@@ -78,8 +79,7 @@ create unique index if not exists applicants_child_key
 
 create table if not exists private.sessions (
   token_hash   text primary key,
-  role         text not null check (role in ('applicant', 'admin')),
-  applicant_id uuid references private.applicants (id) on delete cascade,
+  role         text not null check (role in ('admin')),
   expires_at   timestamptz not null
 );
 
@@ -127,25 +127,6 @@ $$;
 create or replace function private.token_hash(p text) returns text
 language sql immutable set search_path = '' as $$
   select encode(extensions.digest(coalesce(p, ''), 'sha256'), 'hex')
-$$;
-
--- Username mudah diketik: "bpd-" + 6 karakter tanpa 0/o/1/l/i.
-create or replace function private.new_username() returns text
-language plpgsql volatile set search_path = '' as $$
-declare
-  alphabet constant text := 'abcdefghjkmnpqrstuvwxyz23456789';
-  b bytea := extensions.gen_random_bytes(6);
-  s text := '';
-begin
-  for i in 0..5 loop
-    s := s || substr(alphabet, 1 + (get_byte(b, i) % length(alphabet)), 1);
-  end loop;
-  return 'bpd-' || s;
-end $$;
-
-create or replace function private.new_pin() returns text
-language sql volatile set search_path = '' as $$
-  select lpad((abs(('x' || encode(extensions.gen_random_bytes(4), 'hex'))::bit(32)::bigint) % 1000000)::text, 6, '0')
 $$;
 
 create or replace function private.invalid(p_field text) returns void
@@ -230,16 +211,23 @@ language sql stable set search_path = '' as $$
   select coalesce(announce_at <= now(), false) from private.settings where id = 1
 $$;
 
--- Sesi peserta → id peserta. Melempar 'UNAUTHORIZED'.
-create or replace function private.require_applicant(p_token text) returns uuid
-language plpgsql security definer set search_path = '' as $$
-declare v_id uuid;
+-- Pengguna yang sedang masuk (dari JWT Supabase). Melempar 'UNAUTHORIZED'.
+create or replace function private.uid() returns uuid
+language plpgsql stable set search_path = '' as $$
+declare v uuid;
 begin
-  select applicant_id into v_id from private.sessions
-   where token_hash = private.token_hash(p_token) and role = 'applicant' and expires_at > now();
-  if v_id is null then raise exception 'UNAUTHORIZED' using errcode = 'P0001'; end if;
-  return v_id;
+  begin
+    v := nullif(current_setting('request.jwt.claims', true)::jsonb ->> 'sub', '')::uuid;
+  exception when others then v := null;
+  end;
+  if v is null then raise exception 'UNAUTHORIZED' using errcode = 'P0001'; end if;
+  return v;
 end $$;
+
+create or replace function private.jwt_email() returns text
+language sql stable set search_path = '' as $$
+  select lower(nullif(btrim(current_setting('request.jwt.claims', true)::jsonb ->> 'email'), ''))
+$$;
 
 create or replace function private.require_admin(p_token text) returns void
 language plpgsql security definer set search_path = '' as $$
@@ -260,7 +248,7 @@ $$;
 create or replace function private.applicant_json(a private.applicants) returns json
 language sql stable set search_path = '' as $$
   select json_build_object(
-    'id', a.id, 'username', a.username, 'lang', a.lang,
+    'id', a.id, 'email', a.email, 'lang', a.lang,
     'createdAt', a.created_at, 'updatedAt', a.updated_at,
     'status', case when private.released() then a.status else 'pending' end,
     'level', a.level, 'fullName', a.full_name, 'gender', a.gender,
@@ -300,67 +288,40 @@ $$;
 create or replace function public.register(p_profile jsonb, p_lang text default 'id') returns json
 language plpgsql security definer set search_path = '' as $$
 declare
+  v_uid uuid := private.uid();
+  v_email text := private.jwt_email();
   c jsonb;
-  v_user text;
-  v_pin text := private.new_pin();
-  v_id uuid;
 begin
+  if v_email is null then raise exception 'UNAUTHORIZED' using errcode = 'P0001'; end if;
   if not private.registration_open() then raise exception 'CLOSED' using errcode = 'P0001'; end if;
+  if exists (select 1 from private.applicants where user_id = v_uid) then
+    raise exception 'ALREADY_REGISTERED' using errcode = 'P0001';
+  end if;
   -- Pengaman sederhana terhadap pendaftaran massal otomatis.
   if (select count(*) from private.applicants where created_at > now() - interval '1 minute') >= 40 then
     raise exception 'BUSY' using errcode = 'P0001';
   end if;
   c := private.clean_profile(p_profile);
-
-  for i in 1..10 loop
-    v_user := private.new_username();
-    exit when not exists (select 1 from private.applicants where username = v_user);
-    v_user := null;
-  end loop;
-  if v_user is null then raise exception 'BUSY' using errcode = 'P0001'; end if;
-
   begin
     insert into private.applicants (
-      username, pin_hash, lang, level, full_name, gender, birth_place, birth_date, nisn,
+      user_id, email, lang, level, full_name, gender, birth_place, birth_date, nisn,
       province, regency, district, address, origin_school, origin_class,
       parent_name, parent_relation, parent_phone, parent_email, parent_job,
       income_band, siblings, achievements, motivation)
     values (
-      v_user, private.hash_secret(v_pin), case when p_lang = 'en' then 'en' else 'id' end,
+      v_uid, v_email, case when p_lang = 'en' then 'en' else 'id' end,
       c->>'level', c->>'full_name', c->>'gender', c->>'birth_place', (c->>'birth_date')::date, c->>'nisn',
       c->>'province', c->>'regency', c->>'district', c->>'address', c->>'origin_school', c->>'origin_class',
       c->>'parent_name', c->>'parent_relation', c->>'parent_phone', c->>'parent_email', c->>'parent_job',
-      c->>'income_band', (c->>'siblings')::int, c->>'achievements', c->>'motivation')
-    returning id into v_id;
+      c->>'income_band', (c->>'siblings')::int, c->>'achievements', c->>'motivation');
   exception when unique_violation then
+    -- user_id sudah ada (balapan dua tab) atau anak yang sama sudah didaftarkan akun lain
+    if exists (select 1 from private.applicants where user_id = v_uid) then
+      raise exception 'ALREADY_REGISTERED' using errcode = 'P0001';
+    end if;
     raise exception 'DUPLICATE' using errcode = 'P0001';
   end;
-  return json_build_object('username', v_user, 'pin', v_pin);
-end $$;
-
--- Mengembalikan {token} atau {error: 'BAD_LOGIN' | 'LOCKED'} (bukan exception,
--- supaya catatan gagal-login tetap tersimpan).
-create or replace function public.login(p_username text, p_pin text) returns json
-language plpgsql security definer set search_path = '' as $$
-declare
-  v_key   text := 'u:' || left(lower(btrim(coalesce(p_username, ''))), 40);
-  a       private.applicants;
-  v_token text := encode(extensions.gen_random_bytes(32), 'hex');
-begin
-  delete from private.login_failures where at < now() - interval '1 day';
-  if (select count(*) from private.login_failures where key = v_key and at > now() - interval '15 minutes') >= 5 then
-    return json_build_object('error', 'LOCKED');
-  end if;
-  select * into a from private.applicants where username = lower(btrim(coalesce(p_username, '')));
-  if not found or not private.check_secret(p_pin, a.pin_hash) then
-    insert into private.login_failures (key) values (v_key);
-    return json_build_object('error', 'BAD_LOGIN');
-  end if;
-  delete from private.login_failures where key = v_key;
-  delete from private.sessions where expires_at < now();
-  insert into private.sessions (token_hash, role, applicant_id, expires_at)
-    values (private.token_hash(v_token), 'applicant', a.id, now() + interval '12 hours');
-  return json_build_object('token', v_token);
+  return json_build_object('ok', true);
 end $$;
 
 create or replace function public.logout(p_token text) returns void
@@ -370,16 +331,16 @@ $$;
 
 -- Profil + status. Hasil (status) hanya setelah pengumuman dibuka; begitu juga
 -- pesan per status.
-create or replace function public.me(p_token text) returns json
+create or replace function public.me() returns json
 language plpgsql stable security definer set search_path = '' as $$
 declare
   a private.applicants;
   s private.settings;
 begin
-  select * into a from private.applicants where id = private.require_applicant(p_token);
+  select * into a from private.applicants where user_id = private.uid();
   select * into s from private.settings where id = 1;
   return json_build_object(
-    'applicant', private.applicant_json(a),
+    'applicant', case when a.id is null then null else private.applicant_json(a) end,
     'canEdit', private.registration_open(),
     'released', private.released(),
     'announceAt', s.announce_at,
@@ -387,15 +348,18 @@ begin
     'now', now(),
     'title', case when private.released() then s.announce_title end,
     'body', case when private.released() then s.announce_body end,
-    'resultMessage', case when private.released() then s.result_messages -> a.status end);
+    'resultMessage', case when private.released() and a.id is not null then s.result_messages -> a.status end);
 end $$;
 
-create or replace function public.update_profile(p_token text, p_profile jsonb) returns void
+create or replace function public.update_profile(p_profile jsonb) returns void
 language plpgsql security definer set search_path = '' as $$
 declare
-  v_id uuid := private.require_applicant(p_token);
+  v_uid uuid := private.uid();
   c jsonb;
 begin
+  if not exists (select 1 from private.applicants where user_id = v_uid) then
+    raise exception 'NOT_FOUND' using errcode = 'P0001';
+  end if;
   if not private.registration_open() then raise exception 'CLOSED' using errcode = 'P0001'; end if;
   c := private.clean_profile(p_profile);
   begin
@@ -408,7 +372,7 @@ begin
       parent_phone = c->>'parent_phone', parent_email = c->>'parent_email', parent_job = c->>'parent_job',
       income_band = c->>'income_band', siblings = (c->>'siblings')::int,
       achievements = c->>'achievements', motivation = c->>'motivation', updated_at = now()
-    where id = v_id;
+    where user_id = v_uid;
   exception when unique_violation then
     raise exception 'DUPLICATE' using errcode = 'P0001';
   end;
@@ -485,19 +449,6 @@ begin
   return n;
 end $$;
 
--- PIN baru (PIN lama tidak bisa dilihat siapa pun); sesi peserta itu berakhir.
-create or replace function public.admin_reset_pin(p_token text, p_id uuid) returns json
-language plpgsql security definer set search_path = '' as $$
-declare v_pin text := private.new_pin(); v_user text;
-begin
-  perform private.require_admin(p_token);
-  update private.applicants set pin_hash = private.hash_secret(v_pin) where id = p_id returning username into v_user;
-  if v_user is null then raise exception 'NOT_FOUND' using errcode = 'P0001'; end if;
-  delete from private.sessions where applicant_id = p_id;
-  delete from private.login_failures where key = 'u:' || v_user;
-  return json_build_object('username', v_user, 'pin', v_pin);
-end $$;
-
 create or replace function public.admin_delete(p_token text, p_id uuid) returns void
 language plpgsql security definer set search_path = '' as $$
 begin
@@ -516,32 +467,37 @@ end $$;
 
 -- -----------------------------------------------------------------------------
 -- Hak akses: browser hanya boleh memanggil fungsi publik yang disengaja.
+-- Fungsi peserta hanya untuk pengguna yang sudah masuk (role authenticated).
 -- -----------------------------------------------------------------------------
+-- Versi lama (username + PIN) dibuang.
+drop function if exists public.login(text, text);
+drop function if exists public.me(text);
+drop function if exists public.update_profile(text, jsonb);
+drop function if exists public.admin_reset_pin(text, uuid);
+drop function if exists private.require_applicant(text);
+drop function if exists private.new_username();
+drop function if exists private.new_pin();
+
 revoke all on all functions in schema private from public;
 revoke all on function public.set_admin_password(text) from public;
-do $$ begin
-  if exists (select 1 from pg_roles where rolname = 'anon') then
-    revoke all on all functions in schema private from anon;
-    revoke all on function public.set_admin_password(text) from anon;
-    grant execute on function
-      public.get_public_settings(), public.register(jsonb, text), public.login(text, text),
-      public.logout(text), public.me(text), public.update_profile(text, jsonb),
-      public.admin_login(text), public.admin_list(text), public.admin_get_settings(text),
-      public.admin_save_settings(text, boolean, timestamptz, timestamptz, jsonb, jsonb, jsonb),
-      public.admin_set_status(text, uuid[], text), public.admin_reset_pin(text, uuid),
-      public.admin_delete(text, uuid)
-    to anon;
-  end if;
+revoke all on function public.register(jsonb, text), public.me(), public.update_profile(jsonb) from public;
+do $$
+declare r text;
+begin
+  foreach r in array array['anon', 'authenticated'] loop
+    if exists (select 1 from pg_roles where rolname = r) then
+      execute format('revoke all on all functions in schema private from %I', r);
+      execute format('revoke all on function public.set_admin_password(text) from %I', r);
+      execute format('revoke all on function public.register(jsonb, text), public.me(), public.update_profile(jsonb) from %I', r);
+      execute format('grant execute on function
+        public.get_public_settings(), public.logout(text),
+        public.admin_login(text), public.admin_list(text), public.admin_get_settings(text),
+        public.admin_save_settings(text, boolean, timestamptz, timestamptz, jsonb, jsonb, jsonb),
+        public.admin_set_status(text, uuid[], text), public.admin_delete(text, uuid)
+        to %I', r);
+    end if;
+  end loop;
   if exists (select 1 from pg_roles where rolname = 'authenticated') then
-    revoke all on all functions in schema private from authenticated;
-    revoke all on function public.set_admin_password(text) from authenticated;
-    grant execute on function
-      public.get_public_settings(), public.register(jsonb, text), public.login(text, text),
-      public.logout(text), public.me(text), public.update_profile(text, jsonb),
-      public.admin_login(text), public.admin_list(text), public.admin_get_settings(text),
-      public.admin_save_settings(text, boolean, timestamptz, timestamptz, jsonb, jsonb, jsonb),
-      public.admin_set_status(text, uuid[], text), public.admin_reset_pin(text, uuid),
-      public.admin_delete(text, uuid)
-    to authenticated;
+    grant execute on function public.register(jsonb, text), public.me(), public.update_profile(jsonb) to authenticated;
   end if;
 end $$;

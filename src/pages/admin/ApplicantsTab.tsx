@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Download, KeyRound, Trash2 } from 'lucide-react';
+import { Download, Trash2 } from 'lucide-react';
 import { api } from '../../lib/api';
 import { applicantsCsv, downloadCsv } from '../../lib/csv';
 import { useI18n, type TKey } from '../../lib/i18n';
@@ -19,7 +19,6 @@ export function ApplicantsTab({ token, onExpired }: { token: string; onExpired: 
   const [open, setOpen] = useState<string | null>(null);
   const [bulk, setBulk] = useState<Status | ''>('');
   const [notice, setNotice] = useState<string | null>(null);
-  const [newPin, setNewPin] = useState<{ username: string; pin: string } | null>(null);
 
   const fail = useCallback((e: unknown) => {
     if (e instanceof AppError && e.code === 'UNAUTHORIZED') onExpired(); else setError(errText(e));
@@ -34,7 +33,7 @@ export function ApplicantsTab({ token, onExpired }: { token: string; onExpired: 
     const needle = q.trim().toLowerCase();
     return (list ?? []).filter((a) =>
       (!level || a.level === level) && (!status || a.status === status) &&
-      (!needle || [a.fullName, a.username, a.originSchool, a.province, a.regency, a.parentName].join(' ').toLowerCase().includes(needle)));
+      (!needle || [a.fullName, a.email, a.originSchool, a.province, a.regency, a.parentName].join(' ').toLowerCase().includes(needle)));
   }, [list, q, level, status]);
 
   if (error && !list) return <ErrorBox>{error}</ErrorBox>;
@@ -84,13 +83,6 @@ export function ApplicantsTab({ token, onExpired }: { token: string; onExpired: 
 
       {notice && <div role="status" className="rounded-md border border-success bg-success-tint p-3 text-sm font-medium">{notice}</div>}
       {error && <ErrorBox>{error}</ErrorBox>}
-      {newPin && (
-        <div role="status" className="rounded-md border border-accent bg-accent-tint p-3">
-          <div className="text-sm font-semibold">{t('adm.newPin', { user: newPin.username })}</div>
-          <div className="font-mono text-2xl font-bold tracking-widest">{newPin.pin}</div>
-          <div className="text-sm text-muted-foreground">{t('adm.newPinNote')}</div>
-        </div>
-      )}
 
       {list.length === 0 ? <Card><p className="text-muted-foreground">{t('adm.none')}</p></Card> : (
         <div className="overflow-x-auto rounded-lg border border-border bg-surface">
@@ -106,10 +98,6 @@ export function ApplicantsTab({ token, onExpired }: { token: string; onExpired: 
                 <ApplicantRow key={a.id} a={a} checked={sel.has(a.id)} expanded={open === a.id}
                   onCheck={() => setSel((s) => { const n = new Set(s); if (n.has(a.id)) n.delete(a.id); else n.add(a.id); return n; })}
                   onToggle={() => setOpen(open === a.id ? null : a.id)}
-                  onReset={async () => {
-                    if (!window.confirm(t('adm.resetConfirm', { name: a.fullName }))) return;
-                    try { setNewPin(await api.adminResetPin(token, a.id)); window.scrollTo({ top: 0 }); } catch (e) { fail(e); }
-                  }}
                   onDelete={async () => {
                     if (!window.confirm(t('adm.deleteConfirm', { name: a.fullName }))) return;
                     try { await api.adminDelete(token, a.id); setOpen(null); await load(); } catch (e) { fail(e); }
@@ -125,7 +113,7 @@ export function ApplicantsTab({ token, onExpired }: { token: string; onExpired: 
 
 function ApplicantRow(p: {
   a: Applicant; checked: boolean; expanded: boolean; lang: 'id' | 'en';
-  onCheck: () => void; onToggle: () => void; onReset: () => void; onDelete: () => void;
+  onCheck: () => void; onToggle: () => void; onDelete: () => void;
 }) {
   const { t } = useI18n();
   const { a, lang } = p;
@@ -143,7 +131,7 @@ function ApplicantRow(p: {
         <td className="p-2"><input type="checkbox" checked={p.checked} onChange={p.onCheck} aria-label={a.fullName} className="size-5 accent-action" /></td>
         <td className="p-2">
           <button onClick={p.onToggle} aria-expanded={p.expanded} className="text-left font-semibold text-action underline">{a.fullName}</button>
-          <div className="font-mono text-xs text-muted-foreground">{a.username}</div>
+          <div className="break-all text-xs text-muted-foreground">{a.email}</div>
         </td>
         <td className="p-2">{t(`level.${a.level}` as TKey)}</td>
         <td className="p-2">{a.regency}, {a.province}</td>
@@ -158,7 +146,6 @@ function ApplicantRow(p: {
               {det.map(([k, v]) => <div key={k}><dt className="text-xs text-muted-foreground">{t(k)}</dt><dd className="whitespace-pre-line break-words">{v}</dd></div>)}
             </dl>
             <div className="mt-3 flex flex-wrap gap-2">
-              <button onClick={p.onReset} className={`${btnSecondary} !min-h-11 text-sm`}><KeyRound size={16} aria-hidden /> {t('adm.resetPin')}</button>
               <button onClick={p.onDelete} className="inline-flex min-h-11 items-center gap-2 rounded-md border border-destructive px-4 text-sm font-semibold text-destructive">
                 <Trash2 size={16} aria-hidden /> {t('adm.delete')}
               </button>

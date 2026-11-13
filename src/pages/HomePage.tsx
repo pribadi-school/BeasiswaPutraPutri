@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { ClipboardList, KeyRound, Megaphone } from 'lucide-react';
+import { ClipboardList, LogIn, Megaphone } from 'lucide-react';
 import { api } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { formatWib } from '../lib/time';
 import type { PublicSettings } from '../lib/types';
-import { btnPrimary, btnSecondary, Card } from '../components/ui';
+import { btnPrimary, Card } from '../components/ui';
 
 export function HomePage() {
   const { t, lang } = useI18n();
@@ -13,8 +13,8 @@ export function HomePage() {
   useEffect(() => { api.getSettings().then(setS).catch(() => setS(null)); }, []);
 
   const steps = [
-    { Icon: ClipboardList, t: t('home.step1.t'), d: t('home.step1.d') },
-    { Icon: KeyRound, t: t('home.step2.t'), d: t('home.step2.d') },
+    { Icon: LogIn, t: t('home.step1.t'), d: t('home.step1.d') },
+    { Icon: ClipboardList, t: t('home.step2.t'), d: t('home.step2.d') },
     { Icon: Megaphone, t: t('home.step3.t'), d: t('home.step3.d') },
   ];
 
@@ -49,10 +49,7 @@ export function HomePage() {
         </Card>
       )}
 
-      <div className="flex flex-col gap-3 sm:flex-row">
-        {(!s || s.regOpen) && <Link to="/daftar" className={`${btnPrimary} sm:flex-1`}>{t('home.cta.register')}</Link>}
-        <Link to="/masuk" className={`${s?.regOpen === false || s?.released ? btnPrimary : btnSecondary} sm:flex-1`}>{t('home.cta.login')}</Link>
-      </div>
+      <Link to="/masuk" className={`${btnPrimary} w-full`}>{!s || s.regOpen ? t('home.cta') : t('home.ctaBack')}</Link>
     </div>
   );
 }

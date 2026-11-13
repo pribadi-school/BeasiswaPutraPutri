@@ -8,7 +8,7 @@ const cell = (v: unknown): string => {
 };
 
 const COLS: [string, (a: Applicant) => unknown][] = [
-  ['Username', (a) => a.username], ['Status', (a) => a.status], ['Terdaftar', (a) => a.createdAt],
+  ['Email akun', (a) => a.email], ['Status', (a) => a.status], ['Terdaftar', (a) => a.createdAt],
   ['Jenjang', (a) => a.level.toUpperCase()], ['Nama anak', (a) => a.fullName], ['L/P', (a) => a.gender],
   ['Tempat lahir', (a) => a.birthPlace], ['Tanggal lahir', (a) => a.birthDate], ['NISN', (a) => a.nisn],
   ['Provinsi', (a) => a.province], ['Kab/Kota', (a) => a.regency], ['Kecamatan', (a) => a.district], ['Alamat', (a) => a.address],
@@ -18,7 +18,7 @@ const COLS: [string, (a: Applicant) => unknown][] = [
   ['Saudara', (a) => a.siblings], ['Prestasi', (a) => a.achievements], ['Motivasi', (a) => a.motivation],
 ];
 
-/** CSV dengan BOM agar Excel membaca UTF-8, tanpa PIN apa pun. */
+/** CSV dengan BOM agar Excel membaca UTF-8. */
 export function applicantsCsv(list: Applicant[]): string {
   const head = COLS.map(([h]) => cell(h)).join(',');
   const rows = list.map((a) => COLS.map(([, f]) => cell(f(a))).join(','));

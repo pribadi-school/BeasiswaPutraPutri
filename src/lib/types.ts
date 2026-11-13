@@ -32,7 +32,8 @@ export type Profile = {
 
 export type Applicant = Profile & {
   id: string;
-  username: string;
+  /** Email akun Google yang dipakai mendaftar. */
+  email: string;
   lang: Lang;
   status: Status;
   createdAt: string;
@@ -51,8 +52,12 @@ export type PublicSettings = {
   body: Localized | null;
 };
 
+/** Akun Google yang sedang masuk. */
+export type AuthUser = { email: string; name: string | null };
+
 export type Me = {
-  applicant: Applicant;
+  /** null = sudah masuk tapi belum mengisi data. */
+  applicant: Applicant | null;
   canEdit: boolean;
   released: boolean;
   announceAt: string | null;
@@ -71,8 +76,6 @@ export type AdminSettings = {
   body: Localized;
   resultMessages: Partial<Record<Exclude<Status, 'pending'>, Localized>>;
 };
-
-export type Credentials = { username: string; pin: string };
 
 /** Kesalahan yang bisa ditampilkan ke pengguna. `code` dipetakan ke teks di i18n. */
 export class AppError extends Error {

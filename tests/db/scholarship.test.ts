@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type pg from 'pg';
 import { startDatabase, type Harness } from './harness.ts';
@@ -13,159 +14,148 @@ const profile = (over: Record<string, unknown> = {}) => ({
   achievements: '', motivation: 'Ingin belajar.', ...over,
 });
 
-const call = async (fn: string, ...args: unknown[]) => {
+type User = { sub: string; email: string } | null;
+const newUser = (email = `tes-${Math.random().toString(36).slice(2, 8)}@example.com`): User => ({ sub: randomUUID(), email });
+
+/** Memanggil fungsi seperti browser: role authenticated (atau anon) + JWT claims Supabase. */
+async function call(user: User | 'admin', fn: string, ...args: unknown[]) {
   const ph = args.map((_, i) => `$${i + 1}`).join(',');
-  const { rows } = await db.query(`select public.${fn}(${ph}) as r`, args);
-  return rows[0].r;
-};
-const fails = async (fn: string, msg: RegExp, ...args: unknown[]) => {
-  await expect(call(fn, ...args)).rejects.toThrow(msg);
-};
+  const claims = user && user !== 'admin' ? JSON.stringify({ sub: user.sub, email: user.email, role: 'authenticated' }) : '';
+  await db.query(`select set_config('request.jwt.claims', $1, false)`, [claims]);
+  await db.query(user && user !== 'admin' ? 'set role authenticated' : 'set role anon');
+  try {
+    const { rows } = await db.query(`select public.${fn}(${ph}) as r`, args);
+    return rows[0].r;
+  } finally {
+    await db.query('reset role');
+  }
+}
+const fails = (user: User | 'admin', fn: string, msg: RegExp, ...args: unknown[]) =>
+  expect(call(user, fn, ...args)).rejects.toThrow(msg);
+
+let adminToken = '';
+const saveSettings = (announceAt: string | null, regOpen = true) =>
+  call('admin', 'admin_save_settings', adminToken, regOpen, null, announceAt,
+    JSON.stringify({ id: 'Judul', en: 'Title' }), JSON.stringify({ id: 'Isi', en: 'Body' }),
+    JSON.stringify({ lulus: { id: 'Selamat', en: 'Congrats' } }));
 
 beforeAll(async () => {
   h = await startDatabase();
   db = await h.connect();
-  await call('set_admin_password', 'password-admin-1');
+  await db.query(`select public.set_admin_password('password-admin-1')`);
+  adminToken = (await call('admin', 'admin_login', 'password-admin-1')).token;
 }, 180_000);
 afterAll(async () => {
   await db.end();
   await h.stop();
 });
 
-describe('pendaftaran → login', () => {
-  let user = '', pin = '', token = '';
+describe('masuk Google → isi data', () => {
+  const u = newUser('ortu.satu@gmail.com');
 
-  it('mendaftar dan mendapat username + PIN 6 digit', async () => {
-    const r = await call('register', JSON.stringify(profile()), 'id');
-    expect(r.username).toMatch(/^bpd-[a-z2-9]{6}$/);
-    expect(r.pin).toMatch(/^\d{6}$/);
-    user = r.username; pin = r.pin;
+  it('sebelum mendaftar, me() mengembalikan applicant null', async () => {
+    const me = await call(u, 'me');
+    expect(me.applicant).toBeNull();
+    expect(me.canEdit).toBe(true);
   });
 
-  it('PIN tersimpan sebagai hash, bukan teks', async () => {
-    const { rows } = await db.query(`select pin_hash, parent_phone from private.applicants where username = $1`, [user]);
-    expect(rows[0].pin_hash).not.toContain(pin);
-    expect(rows[0].pin_hash).toMatch(/^\$2[aby]\$/);
-    expect(rows[0].parent_phone).toBe('6281234567890');
+  it('mendaftar memakai akun yang sedang masuk; email diambil dari JWT', async () => {
+    await call(u, 'register', JSON.stringify(profile()), 'id');
+    const me = await call(u, 'me');
+    expect(me.applicant.fullName).toBe('Anak Tes Satu');
+    expect(me.applicant.email).toBe('ortu.satu@gmail.com');
+    expect(me.applicant.parentPhone).toBe('6281234567890');
   });
 
-  it('anak yang sama tidak bisa mendaftar dua kali', async () => {
-    await fails('register', /DUPLICATE/, JSON.stringify(profile({ full_name: '  anak TES satu ' })), 'id');
+  it('satu akun hanya satu pendaftaran', async () => {
+    await fails(u, 'register', /ALREADY_REGISTERED/, JSON.stringify(profile({ full_name: 'Anak Lain' })), 'id');
+  });
+
+  it('anak yang sama tidak bisa didaftarkan akun lain', async () => {
+    await fails(newUser(), 'register', /DUPLICATE/, JSON.stringify(profile({ full_name: '  anak TES satu ' })), 'id');
   });
 
   it('isian tidak valid ditolak dengan nama kolomnya', async () => {
-    await fails('register', /INVALID:parent_phone/, JSON.stringify(profile({ full_name: 'B', parent_phone: '123' })), 'id');
-    await fails('register', /INVALID:birth_date/, JSON.stringify(profile({ full_name: 'C', birth_date: '2099-01-01' })), 'id');
-    await fails('register', /INVALID:birth_date/, JSON.stringify(profile({ full_name: 'C', birth_date: null })), 'id');
-    await fails('register', /INVALID:level/, JSON.stringify(profile({ full_name: 'D', level: 'univ' })), 'id');
-    await fails('register', /INVALID:motivation/, JSON.stringify(profile({ full_name: 'E', motivation: ' ' })), 'id');
+    const v = newUser();
+    await fails(v, 'register', /INVALID:parent_phone/, JSON.stringify(profile({ full_name: 'B', parent_phone: '123' })), 'id');
+    await fails(v, 'register', /INVALID:birth_date/, JSON.stringify(profile({ full_name: 'C', birth_date: '2099-01-01' })), 'id');
+    await fails(v, 'register', /INVALID:birth_date/, JSON.stringify(profile({ full_name: 'C', birth_date: null })), 'id');
+    await fails(v, 'register', /INVALID:level/, JSON.stringify(profile({ full_name: 'D', level: 'univ' })), 'id');
+    await fails(v, 'register', /INVALID:motivation/, JSON.stringify(profile({ full_name: 'E', motivation: ' ' })), 'id');
   });
 
-  it('login salah ditolak; username tidak peduli huruf besar', async () => {
-    expect((await call('login', user, '000000')).error).toBe('BAD_LOGIN');
-    expect((await call('login', 'tidak-ada', pin)).error).toBe('BAD_LOGIN');
-    const ok = await call('login', ` ${user.toUpperCase()} `, pin);
-    expect(ok.token).toBeTruthy();
-    token = ok.token;
+  it('peserta bisa mengubah datanya sendiri, dan hanya miliknya', async () => {
+    await call(u, 'update_profile', JSON.stringify(profile({ origin_school: 'SDN Baru' })));
+    expect((await call(u, 'me')).applicant.originSchool).toBe('SDN Baru');
+    await fails(newUser(), 'update_profile', /NOT_FOUND/, JSON.stringify(profile({ full_name: 'Penyusup' })));
+    expect((await call(u, 'me')).applicant.fullName).toBe('Anak Tes Satu');
   });
 
-  it('sesi tersimpan sebagai hash', async () => {
-    const { rows } = await db.query(`select token_hash from private.sessions where role = 'applicant'`);
-    expect(rows.every((r) => r.token_hash !== token)).toBe(true);
+  it('tanpa masuk (anon) fungsi peserta tidak bisa dipanggil', async () => {
+    await fails(null, 'me', /permission denied/);
+    await fails(null, 'register', /permission denied/, JSON.stringify(profile({ full_name: 'Anon' })), 'id');
   });
 
-  it('peserta bisa melihat dan mengubah profilnya', async () => {
-    const me = await call('me', token);
-    expect(me.applicant.fullName).toBe('Anak Tes Satu');
-    expect(me.canEdit).toBe(true);
-    await call('update_profile', token, JSON.stringify(profile({ origin_school: 'SDN Baru' })));
-    expect((await call('me', token)).applicant.originSchool).toBe('SDN Baru');
-  });
-
-  it('token palsu ditolak', async () => {
-    await fails('me', /UNAUTHORIZED/, 'ngawur');
-  });
-
-  it('5x salah PIN mengunci HANYA username itu', async () => {
-    const r2 = await call('register', JSON.stringify(profile({ full_name: 'Anak Tes Dua' })), 'id');
-    for (let i = 0; i < 5; i++) await call('login', r2.username, '111111');
-    expect((await call('login', r2.username, r2.pin)).error).toBe('LOCKED');
-    expect((await call('login', user, pin)).token).toBeTruthy();
+  it('JWT tanpa email ditolak saat mendaftar', async () => {
+    await fails({ sub: randomUUID(), email: '' }, 'register', /UNAUTHORIZED/, JSON.stringify(profile({ full_name: 'Tanpa Email' })), 'id');
   });
 });
 
 describe('pengumuman', () => {
-  let user = '', pin = '', token = '', id = '';
+  const u = newUser();
+  let id = '';
 
   it('hasil tidak terlihat sebelum waktunya, walau admin sudah menetapkan', async () => {
-    const r = await call('register', JSON.stringify(profile({ full_name: 'Anak Tes Tiga' })), 'id');
-    user = r.username; pin = r.pin;
-    token = (await call('login', user, pin)).token;
-    const a = await call('admin_login', 'password-admin-1');
-    expect(a.token).toBeTruthy();
-    const list = await call('admin_list', a.token);
-    id = list.find((x: { username: string }) => x.username === user).id;
-    await call('admin_save_settings', a.token, true, null, new Date(Date.now() + 86_400_000).toISOString(),
-      JSON.stringify({ id: 'Judul', en: 'Title' }), JSON.stringify({ id: 'Isi rahasia', en: 'Secret body' }),
-      JSON.stringify({ lulus: { id: 'Selamat', en: 'Congrats' } }));
-    expect(await call('admin_set_status', a.token, `{${id}}`, 'lulus')).toBe(1);
+    await call(u, 'register', JSON.stringify(profile({ full_name: 'Anak Tes Tiga' })), 'id');
+    const list = await call('admin', 'admin_list', adminToken);
+    id = list.find((x: { email: string }) => x.email === u!.email).id;
+    await saveSettings(new Date(Date.now() + 86_400_000).toISOString());
+    expect(await call('admin', 'admin_set_status', adminToken, `{${id}}`, 'lulus')).toBe(1);
 
-    const me = await call('me', token);
+    const me = await call(u, 'me');
     expect(me.released).toBe(false);
     expect(me.applicant.status).toBe('pending');
     expect(me.body).toBeNull();
     expect(me.resultMessage).toBeNull();
-    const pub = await call('get_public_settings');
-    expect(pub.body).toBeNull();
-    // admin tetap melihat status asli
-    expect((await call('admin_list', a.token)).find((x: { id: string }) => x.id === id).status).toBe('lulus');
+    expect((await call(null, 'get_public_settings')).body).toBeNull();
+    expect((await call('admin', 'admin_list', adminToken)).find((x: { id: string }) => x.id === id).status).toBe('lulus');
   });
 
   it('setelah waktunya tiba, hasil terlihat dan data terkunci', async () => {
-    const a = await call('admin_login', 'password-admin-1');
-    await call('admin_save_settings', a.token, true, null, new Date(Date.now() - 1000).toISOString(),
-      JSON.stringify({ id: 'Judul', en: 'Title' }), JSON.stringify({ id: 'Isi', en: 'Body' }),
-      JSON.stringify({ lulus: { id: 'Selamat', en: 'Congrats' } }));
-    const me = await call('me', token);
+    await saveSettings(new Date(Date.now() - 1000).toISOString());
+    const me = await call(u, 'me');
     expect(me.released).toBe(true);
     expect(me.applicant.status).toBe('lulus');
     expect(me.resultMessage.id).toBe('Selamat');
     expect(me.canEdit).toBe(false);
-    await fails('update_profile', /CLOSED/, token, JSON.stringify(profile({ full_name: 'Anak Tes Tiga' })));
-    await fails('register', /CLOSED/, JSON.stringify(profile({ full_name: 'Terlambat' })), 'id');
-  });
-
-  it('reset PIN: PIN lama mati, PIN baru bekerja', async () => {
-    const a = await call('admin_login', 'password-admin-1');
-    const r = await call('admin_reset_pin', a.token, id);
-    expect(r.pin).not.toBe(pin);
-    await fails('me', /UNAUTHORIZED/, token);
-    expect((await call('login', user, pin)).error).toBe('BAD_LOGIN');
-    expect((await call('login', user, r.pin)).token).toBeTruthy();
+    await fails(u, 'update_profile', /CLOSED/, JSON.stringify(profile({ full_name: 'Anak Tes Tiga' })));
+    await fails(newUser(), 'register', /CLOSED/, JSON.stringify(profile({ full_name: 'Terlambat' })), 'id');
+    await saveSettings(null);
   });
 });
 
 describe('keamanan', () => {
-  it('fungsi admin menolak tanpa token admin (termasuk token peserta)', async () => {
-    const a = await call('admin_login', 'password-admin-1');
-    await call('admin_save_settings', a.token, true, null, null, '{"id":"","en":""}', '{"id":"","en":""}', '{}');
-    const r = await call('register', JSON.stringify(profile({ full_name: 'Anak Tes Empat' })), 'id');
-    const t = (await call('login', r.username, r.pin)).token;
-    await fails('admin_list', /UNAUTHORIZED/, t);
-    await fails('admin_set_status', /UNAUTHORIZED/, t, '{}', 'lulus');
-    expect((await call('admin_login', 'salah')).error).toBe('BAD_LOGIN');
+  it('fungsi admin menolak tanpa token admin; salah password ditolak', async () => {
+    await fails('admin', 'admin_list', /UNAUTHORIZED/, 'ngawur');
+    await fails('admin', 'admin_set_status', /UNAUTHORIZED/, 'ngawur', '{}', 'lulus');
+    expect((await call('admin', 'admin_login', 'salah')).error).toBe('BAD_LOGIN');
   });
 
-  it('role anon tidak bisa membaca tabel private maupun fungsi internal', async () => {
-    await db.query('set role anon');
-    try {
-      await expect(db.query('select * from private.applicants')).rejects.toThrow(/permission denied/);
-      await expect(db.query(`select public.set_admin_password('hackhackhack')`)).rejects.toThrow(/permission denied/);
-      await expect(db.query(`select private.new_pin()`)).rejects.toThrow(/permission denied/);
-      const { rows } = await db.query('select public.get_public_settings() as r');
-      expect(rows[0].r.released).toBeDefined();
-    } finally {
-      await db.query('reset role');
+  it('password admin tersimpan sebagai hash bcrypt', async () => {
+    const { rows } = await db.query(`select hash from private.secrets where key = 'admin_password'`);
+    expect(rows[0].hash).toMatch(/^\$2[aby]\$/);
+  });
+
+  it('browser (anon/authenticated) tidak bisa membaca tabel private maupun fungsi internal', async () => {
+    for (const role of ['anon', 'authenticated']) {
+      await db.query(`set role ${role}`);
+      try {
+        await expect(db.query('select * from private.applicants')).rejects.toThrow(/permission denied/);
+        await expect(db.query(`select public.set_admin_password('hackhackhack')`)).rejects.toThrow(/permission denied/);
+        await expect(db.query(`select private.uid()`)).rejects.toThrow(/permission denied/);
+      } finally {
+        await db.query('reset role');
+      }
     }
   });
 });

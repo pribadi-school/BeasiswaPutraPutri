@@ -25,9 +25,12 @@ export function Layout() {
           <button
             type="button"
             onClick={() => setLang(lang === 'id' ? 'en' : 'id')}
+            aria-label={t('lang.switch')}
             className="inline-flex min-h-11 shrink-0 items-center gap-1 rounded-md border border-border-strong px-3 text-sm font-semibold text-action hover:bg-action-tint"
           >
-            <Languages size={18} aria-hidden /> {t('lang.switch')}
+            <Languages size={18} aria-hidden />
+            <span className="sm:hidden">{lang === 'id' ? 'EN' : 'ID'}</span>
+            <span className="hidden sm:inline">{t('lang.switch')}</span>
           </button>
         </div>
       </header>

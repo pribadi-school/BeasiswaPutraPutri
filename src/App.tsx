@@ -1,10 +1,9 @@
-import { BrowserRouter, Route, Routes } from 'react-router';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { Layout } from './components/Layout';
 import { I18nProvider } from './lib/i18n';
 import { AccountPage } from './pages/AccountPage';
 import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
-import { RegisterPage } from './pages/RegisterPage';
 import { AdminPage } from './pages/admin/AdminPage';
 
 export function App() {
@@ -14,7 +13,7 @@ export function App() {
         <Routes>
           <Route element={<Layout />}>
             <Route index element={<HomePage />} />
-            <Route path="daftar" element={<RegisterPage />} />
+            <Route path="daftar" element={<Navigate to="/masuk" replace />} />
             <Route path="masuk" element={<LoginPage />} />
             <Route path="akun" element={<AccountPage />} />
             <Route path="admin" element={<AdminPage />} />
