@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { api } from '../lib/api';
 import { useI18n } from '../lib/i18n';
-import { Card, ErrorBox, Field, inputCls, useErrorText } from '../components/ui';
+import { ErrorBox, Field, inputCls, useErrorText } from '../components/ui';
+import { HeroArt } from '../components/HeroArt';
 import { GoogleButton } from '../components/GoogleButton';
 
 export function LoginPage() {
@@ -33,11 +34,15 @@ export function LoginPage() {
 
   return (
     <div className="mx-auto max-w-md space-y-4">
-      <div>
-        <h1 className="text-2xl font-extrabold">{t('login.title')}</h1>
-        <p className="mt-1 text-muted-foreground">{t('login.lead')}</p>
+      <div className="overflow-hidden rounded-lg bg-surface shadow-e2">
+      <div className="bg-brand-gradient flex items-center justify-between gap-2 px-5 py-4 text-white">
+        <div>
+          <h1 className="text-2xl font-extrabold text-white">{t('login.title')}</h1>
+          <p className="mt-1 text-sm text-on-action-muted">{t('login.lead')}</p>
+        </div>
+        <div className="hidden min-[400px]:block"><HeroArt compact /></div>
       </div>
-      <Card className="space-y-4">
+      <div className="space-y-4 p-5">
         {api.mode === 'demo' && (
           <Field id="demo-email" label={t('login.demoEmail')} hint={t('login.demoHint')}>
             <input id="demo-email" type="email" inputMode="email" value={demoEmail} onChange={(e) => setDemoEmail(e.target.value)}
@@ -48,7 +53,8 @@ export function LoginPage() {
         <GoogleButton label={busy ? t('login.entering') : t('login.google')} busy={busy} onClick={() => void signIn()}
           disabled={api.mode === 'demo' && !demoEmail.trim()} />
         <p className="text-sm text-muted-foreground">{t('login.privacy')}</p>
-      </Card>
+      </div>
+      </div>
       <p className="text-sm text-muted-foreground">{t('login.help')}</p>
     </div>
   );

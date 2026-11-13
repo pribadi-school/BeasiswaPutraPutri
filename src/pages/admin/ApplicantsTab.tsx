@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Download, Trash2 } from 'lucide-react';
+import { Download, Trash2, Users } from 'lucide-react';
 import { api } from '../../lib/api';
 import { applicantsCsv, downloadCsv } from '../../lib/csv';
 import { useI18n, type TKey } from '../../lib/i18n';
 import { formatDateOnly, formatWib } from '../../lib/time';
 import { AppError, STATUSES, type Applicant, type Level, type Status } from '../../lib/types';
-import { btnPrimary, btnSecondary, Card, ErrorBox, inputCls, StatusBadge, useErrorText } from '../../components/ui';
+import { btnPrimary, btnSecondary, Card, ErrorBox, inputCls, StatCard, STATUS_STYLE, StatusBadge, useErrorText } from '../../components/ui';
+import { WelcomeBanner } from '../../components/WelcomeBanner';
+import { useAdmin } from './AdminPage';
 
-export function ApplicantsTab({ token, onExpired }: { token: string; onExpired: () => void }) {
+export function ApplicantsTab() {
+  const { token, onExpired } = useAdmin();
   const { t, lang } = useI18n();
   const errText = useErrorText();
   const [list, setList] = useState<Applicant[] | null>(null);
@@ -36,8 +39,9 @@ export function ApplicantsTab({ token, onExpired }: { token: string; onExpired: 
       (!needle || [a.fullName, a.email, a.originSchool, a.province, a.regency, a.parentName].join(' ').toLowerCase().includes(needle)));
   }, [list, q, level, status]);
 
-  if (error && !list) return <ErrorBox>{error}</ErrorBox>;
-  if (!list) return <p className="text-muted-foreground">{t('common.loading')}</p>;
+  const banner = <WelcomeBanner eyebrow={formatWib(new Date().toISOString(), lang, false)} title={t('adm.welcome')} subtitle={t('adm.sub')} />;
+  if (error && !list) return <div className="space-y-5">{banner}<ErrorBox>{error}</ErrorBox></div>;
+  if (!list) return <div className="space-y-5">{banner}<p className="text-muted-foreground">{t('common.loading')}</p></div>;
 
   const allSelected = shown.length > 0 && shown.every((a) => sel.has(a.id));
   const toggleAll = () => setSel(allSelected ? new Set() : new Set(shown.map((a) => a.id)));
@@ -51,10 +55,15 @@ export function ApplicantsTab({ token, onExpired }: { token: string; onExpired: 
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-        <span className="font-semibold text-foreground">{t('adm.total', { n: list.length })}</span>
-        {STATUSES.map((s) => <span key={s} className="inline-flex items-center gap-1"><StatusBadge status={s} /> {list.filter((a) => a.status === s).length}</span>)}
+    <div className="space-y-4">
+      {banner}
+      <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 md:grid-cols-5">
+        <StatCard Icon={Users} value={list.length} label={t('adm.stat.total')} highlight />
+        {STATUSES.map((s) => (
+          <button key={s} type="button" onClick={() => setStatus(status === s ? '' : s)} aria-pressed={status === s} className="rounded-lg text-left sm:text-center">
+            <StatCard Icon={STATUS_STYLE[s].Icon} value={list.filter((a) => a.status === s).length} label={t(`status.short.${s}` as TKey)} highlight={status === s} />
+          </button>
+        ))}
       </div>
 
       <div className="grid gap-2 sm:grid-cols-4">
@@ -85,9 +94,9 @@ export function ApplicantsTab({ token, onExpired }: { token: string; onExpired: 
       {error && <ErrorBox>{error}</ErrorBox>}
 
       {list.length === 0 ? <Card><p className="text-muted-foreground">{t('adm.none')}</p></Card> : (
-        <div className="overflow-x-auto rounded-lg border border-border bg-surface">
+        <div className="overflow-x-auto rounded-lg bg-surface shadow-e2">
           <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="bg-surface-muted text-foreground">
+            <thead className="bg-action-tint text-foreground">
               <tr>
                 <th className="w-10 p-2"><input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all" className="size-5 accent-action" /></th>
                 {(['name', 'level', 'origin', 'school', 'created', 'status'] as const).map((c) => <th key={c} className="p-2 font-semibold">{t(`adm.col.${c}` as TKey)}</th>)}

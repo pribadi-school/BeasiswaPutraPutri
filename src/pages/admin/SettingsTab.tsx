@@ -4,6 +4,7 @@ import { useI18n, type TKey } from '../../lib/i18n';
 import { fromInputWib, toInputWib } from '../../lib/time';
 import { AppError, type AdminSettings, type Localized, type Status } from '../../lib/types';
 import { btnPrimary, Card, ErrorBox, Field, inputCls, useErrorText } from '../../components/ui';
+import { useAdmin } from './AdminPage';
 
 const RESULT_STATUSES = ['lulus', 'cadangan', 'tidak_lulus'] as const;
 
@@ -25,7 +26,8 @@ function LocalizedInput({ idp, label, value, onChange, rows }: { idp: string; la
   );
 }
 
-export function SettingsTab({ token, onExpired }: { token: string; onExpired: () => void }) {
+export function SettingsTab() {
+  const { token, onExpired } = useAdmin();
   const { t } = useI18n();
   const errText = useErrorText();
   const [s, setS] = useState<AdminSettings | null>(null);
@@ -57,6 +59,7 @@ export function SettingsTab({ token, onExpired }: { token: string; onExpired: ()
 
   return (
     <div className="space-y-4">
+      <h1 className="text-2xl font-extrabold">{t('adm.tab.settings')}</h1>
       <Card className="space-y-4">
         <label className="flex items-center gap-3">
           <input type="checkbox" checked={s.regOpen} onChange={(e) => setS({ ...s, regOpen: e.target.checked })} className="size-6 accent-action" />

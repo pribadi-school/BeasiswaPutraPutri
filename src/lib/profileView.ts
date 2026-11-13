@@ -1,0 +1,37 @@
+import type { TKey } from './i18n';
+import { formatDateOnly } from './time';
+import type { Applicant, Lang } from './types';
+
+type T = (k: TKey, v?: Record<string, string | number>) => string;
+export type Group = { title: TKey; rows: [TKey, string][] };
+
+/** Data pendaftar dikelompokkan seperti bagian formulir. */
+export function profileGroups(a: Applicant, t: T, lang: Lang): Group[] {
+  const none = t('common.none');
+  return [
+    { title: 'sec.child', rows: [
+      ['f.level', t(`level.${a.level}` as TKey)], ['f.fullName', a.fullName], ['f.gender', t(`gender.${a.gender}` as TKey)],
+      ['f.birthPlace', a.birthPlace], ['f.birthDate', formatDateOnly(a.birthDate, lang)], ['f.nisn', a.nisn || none],
+    ] },
+    { title: 'sec.origin', rows: [
+      ['f.province', a.province], ['f.regency', a.regency], ['f.district', a.district], ['f.address', a.address],
+    ] },
+    { title: 'sec.school', rows: [['f.originSchool', a.originSchool], ['f.originClass', a.originClass]] },
+    { title: 'sec.parent', rows: [
+      ['f.parentName', a.parentName], ['f.parentRelation', t(`rel.${a.parentRelation}` as TKey)],
+      ['f.parentPhone', '+' + a.parentPhone], ['f.parentEmail', a.parentEmail || none], ['f.parentJob', a.parentJob],
+    ] },
+    { title: 'sec.extra', rows: [
+      ['f.incomeBand', a.incomeBand ? t(`income.${a.incomeBand}` as TKey) : none], ['f.siblings', a.siblings || none],
+      ['f.achievements', a.achievements || none], ['f.motivation', a.motivation],
+    ] },
+  ];
+}
+
+/** Persentase isian yang terisi (wajib selalu terisi; sisanya isian opsional). */
+export function completeness(a: Applicant): number {
+  const optional = [a.nisn, a.parentEmail, a.incomeBand, a.siblings, a.achievements];
+  const required = 16;
+  const filled = required + optional.filter((v) => String(v ?? '').trim() !== '').length;
+  return Math.round((filled / (required + optional.length)) * 100);
+}

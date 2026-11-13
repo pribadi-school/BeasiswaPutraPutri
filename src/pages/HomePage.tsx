@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { ClipboardList, LogIn, Megaphone } from 'lucide-react';
+import { CalendarClock, ClipboardList, LogIn, Megaphone } from 'lucide-react';
 import { api } from '../lib/api';
 import { useI18n } from '../lib/i18n';
 import { formatWib } from '../lib/time';
 import type { PublicSettings } from '../lib/types';
-import { btnPrimary, Card } from '../components/ui';
+import { IconTile, SectionHeader } from '../components/ui';
+import { WelcomeBanner } from '../components/WelcomeBanner';
 
 export function HomePage() {
   const { t, lang } = useI18n();
@@ -17,39 +18,41 @@ export function HomePage() {
     { Icon: ClipboardList, t: t('home.step2.t'), d: t('home.step2.d') },
     { Icon: Megaphone, t: t('home.step3.t'), d: t('home.step3.d') },
   ];
+  const info: string[] = !s ? [] : s.released ? [t('home.released')] : [
+    ...(!s.regOpen ? [t('home.closed')] : []),
+    ...(s.regDeadline ? [t('home.deadline', { date: formatWib(s.regDeadline, lang) })] : []),
+    s.announceAt ? t('home.announceOn', { date: formatWib(s.announceAt, lang) }) : t('home.announceTbd'),
+  ];
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-extrabold">{t('home.title')}</h1>
-        <p className="mt-2 text-base text-muted-foreground">{t('home.lead')}</p>
-      </div>
+      <WelcomeBanner eyebrow={t('app.school')} title={t('home.title')} subtitle={t('home.lead')}>
+        <Link to="/masuk" className="inline-flex min-h-12 items-center justify-center rounded-full bg-surface px-6 font-semibold text-action shadow-e2 transition hover:bg-action-tint">
+          {!s || s.regOpen ? t('home.cta') : t('home.ctaBack')}
+        </Link>
+      </WelcomeBanner>
 
-      <ol className="space-y-3">
-        {steps.map(({ Icon, t: title, d }, i) => (
-          <li key={i} className="flex gap-3 rounded-lg border border-border bg-surface p-4">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-action-tint text-action"><Icon size={22} aria-hidden /></span>
-            <div>
-              <h2 className="text-base font-bold">{i + 1}. {title}</h2>
-              <p className="text-sm text-muted-foreground">{d}</p>
-            </div>
-          </li>
-        ))}
-      </ol>
+      <section>
+        <SectionHeader title={t('home.how')} />
+        <ol className="grid gap-3 sm:grid-cols-3">
+          {steps.map(({ Icon, t: title, d }, i) => (
+            <li key={i} className="lift flex gap-3 rounded-lg bg-surface p-4 shadow-e2 sm:flex-col">
+              <IconTile Icon={Icon} size="lg" />
+              <div>
+                <h3 className="font-bold text-foreground"><span className="text-action">{i + 1}.</span> {title}</h3>
+                <p className="mt-0.5 text-sm text-muted-foreground">{d}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </section>
 
-      {s && (
-        <Card className="space-y-1 text-sm">
-          {s.released ? <p className="font-semibold text-foreground">{t('home.released')}</p> : (
-            <>
-              <p className="font-semibold text-foreground">{!s.regOpen ? t('home.closed') : null}</p>
-              {s.regDeadline && <p>{t('home.deadline', { date: formatWib(s.regDeadline, lang) })}</p>}
-              <p>{s.announceAt ? t('home.announceOn', { date: formatWib(s.announceAt, lang) }) : t('home.announceTbd')}</p>
-            </>
-          )}
-        </Card>
+      {info.length > 0 && (
+        <section className="flex gap-3 rounded-lg bg-surface p-5 shadow-e2">
+          <CalendarClock size={22} className="mt-0.5 shrink-0 text-action" aria-hidden />
+          <ul className="space-y-1 text-sm text-foreground">{info.map((x) => <li key={x}>{x}</li>)}</ul>
+        </section>
       )}
-
-      <Link to="/masuk" className={`${btnPrimary} w-full`}>{!s || s.regOpen ? t('home.cta') : t('home.ctaBack')}</Link>
     </div>
   );
 }
