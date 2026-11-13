@@ -1,7 +1,8 @@
 /** Tipe data bersama. */
 
 export type Lang = 'id' | 'en';
-export type Level = 'sd' | 'smp' | 'sma';
+/** Jenjang yang dituju. SD tidak dibuka untuk beasiswa ini. */
+export type Level = 'smp' | 'sma';
 export type Status = 'pending' | 'lulus' | 'cadangan' | 'tidak_lulus';
 export const STATUSES: Status[] = ['pending', 'lulus', 'cadangan', 'tidak_lulus'];
 

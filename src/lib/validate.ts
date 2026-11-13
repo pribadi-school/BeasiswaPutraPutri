@@ -35,7 +35,7 @@ export function validateProfile(p: Profile): (keyof Profile)[] {
     const v = p[k].trim();
     if (!v || v.length > (LIMITS[k] ?? 200)) bad.push(k);
   }
-  if (!p.level) bad.push('level');
+  if (p.level !== 'smp' && p.level !== 'sma') bad.push('level');
   if (!p.gender) bad.push('gender');
   if (!p.parentRelation) bad.push('parentRelation');
   if (!/^\d{4}-\d{2}-\d{2}$/.test(p.birthDate) || p.birthDate < '1995-01-01' || p.birthDate > maxBirthDate()) bad.push('birthDate');

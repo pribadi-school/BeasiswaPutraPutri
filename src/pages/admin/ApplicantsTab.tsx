@@ -70,7 +70,7 @@ export function ApplicantsTab() {
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('adm.search')} aria-label={t('adm.search')} className={`${inputCls} sm:col-span-2`} />
         <select value={level} onChange={(e) => setLevel(e.target.value as Level | '')} aria-label={t('adm.level')} className={inputCls}>
           <option value="">{t('adm.level')}: {t('adm.all')}</option>
-          {(['sd', 'smp', 'sma'] as const).map((l) => <option key={l} value={l}>{t(`level.${l}` as TKey)}</option>)}
+          {(['smp', 'sma'] as const).map((l) => <option key={l} value={l}>{t(`level.${l}` as TKey)}</option>)}
         </select>
         <select value={status} onChange={(e) => setStatus(e.target.value as Status | '')} aria-label={t('adm.status')} className={inputCls}>
           <option value="">{t('adm.status')}: {t('adm.all')}</option>

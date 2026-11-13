@@ -51,7 +51,7 @@ create table if not exists private.applicants (
   updated_at    timestamptz not null default now(),
   consent_at    timestamptz not null default now(),
 
-  level         text not null check (level in ('sd', 'smp', 'sma')),
+  level         text not null check (level in ('smp', 'sma')),  -- SD tidak dibuka
   full_name     text not null,
   gender        text not null check (gender in ('L', 'P')),
   birth_place   text not null,
@@ -73,6 +73,10 @@ create table if not exists private.applicants (
   achievements  text,
   motivation    text not null
 );
+-- Database yang dibuat sebelum SD dihapus: perbarui aturan jenjangnya.
+alter table private.applicants drop constraint if exists applicants_level_check;
+alter table private.applicants add constraint applicants_level_check check (level in ('smp', 'sma'));
+
 -- Satu anak = satu pendaftaran.
 create unique index if not exists applicants_child_key
   on private.applicants (lower(btrim(full_name)), birth_date);
@@ -160,7 +164,7 @@ begin
     r := r || jsonb_build_object(k, regexp_replace(btrim(p->>k), '[[:cntrl:]]', ' ', 'g'));
   end loop;
 
-  if (p->>'level') is null or (p->>'level') not in ('sd', 'smp', 'sma') then perform private.invalid('level'); end if;
+  if (p->>'level') is null or (p->>'level') not in ('smp', 'sma') then perform private.invalid('level'); end if;
   if (p->>'gender') is null or (p->>'gender') not in ('L', 'P') then perform private.invalid('gender'); end if;
   if (p->>'parent_relation') is null or (p->>'parent_relation') not in ('ayah', 'ibu', 'wali') then
     perform private.invalid('parent_relation');

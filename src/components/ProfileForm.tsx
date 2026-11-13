@@ -85,7 +85,7 @@ export function ProfileForm({ initial, submitLabel, busyLabel, withConsent, serv
     <form ref={formRef} onSubmit={submit} noValidate className="space-y-4">
       <Card className="space-y-4">
         <h2 className="text-lg font-bold">{t('sec.child')}</h2>
-        {select('level', 'f.level', [{ v: 'sd', l: t('level.sd') }, { v: 'smp', l: t('level.smp') }, { v: 'sma', l: t('level.sma') }])}
+        {select('level', 'f.level', [{ v: 'smp', l: t('level.smp') }, { v: 'sma', l: t('level.sma') }])}
         {text('fullName', 'f.fullName', { auto: 'off' })}
         {select('gender', 'f.gender', [{ v: 'L', l: t('gender.L') }, { v: 'P', l: t('gender.P') }])}
         {text('birthPlace', 'f.birthPlace')}

@@ -81,6 +81,7 @@ describe('masuk Google → isi data', () => {
     await fails(v, 'register', /INVALID:birth_date/, JSON.stringify(profile({ full_name: 'C', birth_date: '2099-01-01' })), 'id');
     await fails(v, 'register', /INVALID:birth_date/, JSON.stringify(profile({ full_name: 'C', birth_date: null })), 'id');
     await fails(v, 'register', /INVALID:level/, JSON.stringify(profile({ full_name: 'D', level: 'univ' })), 'id');
+    await fails(v, 'register', /INVALID:level/, JSON.stringify(profile({ full_name: 'D', level: 'sd' })), 'id');
     await fails(v, 'register', /INVALID:motivation/, JSON.stringify(profile({ full_name: 'E', motivation: ' ' })), 'id');
   });
 
