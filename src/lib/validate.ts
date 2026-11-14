@@ -1,13 +1,13 @@
 /**
- * Aturan isian — cermin dari private.clean_profile() di database.
- * Database tetap penjaga utamanya; ini untuk pesan kesalahan yang cepat dan
- * dipakai juga oleh mode demo.
+ * Aturan isian pendaftaran — SATU sumber untuk browser dan server.
+ * Browser memakainya untuk pesan cepat; server (server/) memakainya sebagai
+ * penjaga sebenarnya sebelum menyimpan ke MySQL. Mode demo juga memakainya.
  */
-import type { Profile } from './types';
+import { emptyProfile, type Profile } from './types.ts';
 
 const LIMITS: Partial<Record<keyof Profile, number>> = {
   fullName: 120, birthPlace: 80, province: 60, regency: 80, district: 80, address: 300,
-  originSchool: 120, originClass: 30, parentName: 120, parentJob: 80, motivation: 1500,
+  originSchool: 120, originClass: 2, parentName: 120, parentJob: 80, motivation: 1500,
   achievements: 1000, parentEmail: 120,
 };
 
@@ -21,6 +21,9 @@ const REQUIRED_TEXT: (keyof Profile)[] = [
 export const PROVINCE = 'Jawa Barat';
 /** Kelas saat ini yang boleh mendaftar, sesuai jenjang tujuan. */
 export const CLASS_FOR_LEVEL = { smp: '6', sma: '9' } as const;
+const GENDERS = ['L', 'P'];
+const RELATIONS = ['ayah', 'ibu', 'wali'];
+const INCOME = ['lt1', '1to3', '3to5', 'gt5'];
 
 /** 08…, 62… atau +62… → "62…". Mengembalikan null bila tidak valid. */
 export function normalizePhone(raw: string): string | null {
@@ -29,10 +32,15 @@ export function normalizePhone(raw: string): string | null {
   return '62' + s.replace(/^(\+?62|0)/, '');
 }
 
-export function maxBirthDate(): string {
-  const d = new Date(Date.now() - 3 * 365 * 86400_000);
-  return d.toISOString().slice(0, 10);
+export function maxBirthDate(now = Date.now()): string {
+  return new Date(now - 3 * 365 * 86400_000).toISOString().slice(0, 10);
 }
+
+const isRealDate = (ymd: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return false;
+  const d = new Date(ymd + 'T00:00:00Z');
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === ymd;
+};
 
 /** Daftar nama kolom yang tidak valid (kosong = lolos). */
 export function validateProfile(p: Profile): (keyof Profile)[] {
@@ -42,29 +50,47 @@ export function validateProfile(p: Profile): (keyof Profile)[] {
     if (!v || v.length > (LIMITS[k] ?? 200)) bad.push(k);
   }
   if (p.level !== 'smp' && p.level !== 'sma') bad.push('level');
-  if (!p.gender) bad.push('gender');
-  if (!p.parentRelation) bad.push('parentRelation');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(p.birthDate) || p.birthDate < '1995-01-01' || p.birthDate > maxBirthDate()) bad.push('birthDate');
+  if (!GENDERS.includes(p.gender)) bad.push('gender');
+  if (!RELATIONS.includes(p.parentRelation)) bad.push('parentRelation');
+  if (!isRealDate(p.birthDate) || p.birthDate < '1995-01-01' || p.birthDate > maxBirthDate()) bad.push('birthDate');
   if (!normalizePhone(p.parentPhone)) bad.push('parentPhone');
   if (p.province.trim() && p.province.trim() !== PROVINCE) bad.push('province');
-  if (p.originClass && (!p.level || p.originClass !== CLASS_FOR_LEVEL[p.level])) bad.push('originClass');
+  if (p.originClass && (!p.level || p.originClass !== CLASS_FOR_LEVEL[p.level as 'smp' | 'sma'])) bad.push('originClass');
   if (!/^\d{10}$/.test(p.nisn.trim())) bad.push('nisn');
   const email = p.parentEmail.trim();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || email.length > 120) bad.push('parentEmail');
-  if (p.siblings.trim() && !/^\d{1,2}$/.test(p.siblings.trim())) bad.push('siblings');
-  return bad;
+  if (p.incomeBand && !INCOME.includes(p.incomeBand)) bad.push('incomeBand');
+  const sib = p.siblings.trim();
+  if (sib && (!/^\d{1,2}$/.test(sib) || Number(sib) > 20)) bad.push('siblings');
+  return [...new Set(bad)];
 }
 
-/** Bentuk yang dikirim ke database (snake_case, sudah dirapikan). */
-export function toPayload(p: Profile): Record<string, unknown> {
+/**
+ * Dari JSON apa pun (mis. kiriman browser) → Profile berisi string saja.
+ * Kolom yang tidak dikenal diabaikan; kolom yang bukan teks dianggap kosong.
+ */
+export function coerceProfile(raw: unknown): Profile {
+  const src = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const out = emptyProfile();
+  for (const k of Object.keys(out) as (keyof Profile)[]) {
+    const v = src[k];
+    (out as Record<string, string>)[k] = typeof v === 'string' ? v : typeof v === 'number' ? String(v) : '';
+  }
+  return out;
+}
+
+/** Profile yang sudah lolos validateProfile → nilai rapi untuk disimpan. */
+export function cleanProfile(p: Profile): Profile {
+  // Karakter kontrol (tab, baris baru di isian satu baris, dll.) diganti spasi.
+  const t = (s: string) => s.trim().replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, ' ');
   return {
-    level: p.level, full_name: p.fullName.trim(), gender: p.gender,
-    birth_place: p.birthPlace.trim(), birth_date: p.birthDate, nisn: p.nisn.trim(),
-    province: p.province.trim(), regency: p.regency.trim(), district: p.district.trim(), address: p.address.trim(),
-    origin_school: p.originSchool.trim(), origin_class: p.originClass.trim(),
-    parent_name: p.parentName.trim(), parent_relation: p.parentRelation, parent_phone: p.parentPhone.trim(),
-    parent_email: p.parentEmail.trim(), parent_job: p.parentJob.trim(),
-    income_band: p.incomeBand, siblings: p.siblings.trim(),
-    achievements: p.achievements.trim(), motivation: p.motivation.trim(),
+    level: p.level, gender: p.gender, parentRelation: p.parentRelation, incomeBand: p.incomeBand,
+    birthDate: p.birthDate, province: PROVINCE,
+    fullName: t(p.fullName), birthPlace: t(p.birthPlace), nisn: p.nisn.trim(),
+    regency: t(p.regency), district: t(p.district), address: t(p.address),
+    originSchool: t(p.originSchool), originClass: p.originClass,
+    parentName: t(p.parentName), parentPhone: normalizePhone(p.parentPhone) ?? '',
+    parentEmail: p.parentEmail.trim(), parentJob: t(p.parentJob),
+    siblings: p.siblings.trim(), achievements: t(p.achievements), motivation: t(p.motivation),
   };
 }

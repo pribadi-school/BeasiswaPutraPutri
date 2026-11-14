@@ -7,3 +7,9 @@ dist
 # Ekspor data pendaftar berisi data pribadi anak: jangan di-commit
 exports/
 *.csv
+# Hasil build server dan paket deploy
+server-dist/
+deploy/
+beasiswa-deploy.zip
+# Berkas PDF peserta saat uji lokal (data pribadi)
+uploads/

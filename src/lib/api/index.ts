@@ -1,9 +1,9 @@
 import type { Api } from './api';
 import { createDemoApi } from './demoApi';
-import { createSupabaseApi } from './supabaseApi';
+import { createHttpApi } from './httpApi';
 
-const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim();
-const key = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim();
-
-/** Supabase bila URL dan anon key diisi; selain itu mode demo (data hanya di browser ini). */
-export const api: Api = url && key ? createSupabaseApi(url, key) : createDemoApi();
+/**
+ * VITE_BACKEND=server → server Node.js + MySQL (build produksi memakai ini, lihat .env.production).
+ * Selain itu → mode demo (data hanya di browser ini), untuk mencoba tampilan.
+ */
+export const api: Api = import.meta.env.VITE_BACKEND === 'server' ? createHttpApi() : createDemoApi();

@@ -101,8 +101,9 @@ export function createDemoApi(): Api {
     },
 
     async getUser() { return currentUser(); },
-    async signInWithGoogle(demoEmail) {
-      const email = demoEmail?.trim().toLowerCase() ?? '';
+    async authConfig() { return { googleClientId: null, devLogin: true }; },
+    async signIn(input) {
+      const email = ('devEmail' in input ? input.devEmail : '').trim().toLowerCase();
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new AppError('INVALID', 'email');
       sessionStorage.setItem(USER_KEY, JSON.stringify({ email, name: null } satisfies AuthUser));
     },
