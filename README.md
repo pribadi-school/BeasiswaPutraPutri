@@ -111,20 +111,49 @@ Buka http://localhost:8787.
      DELETE, CREATE, ALTER, INDEX, REFERENCES**. Hak lain tidak perlu.
 3. **SSL/TLS Status** (AutoSSL): pastikan subdomain memakai HTTPS.
 
-### 3. Unggah aplikasi
+### 3. Clone ke `~/repositories` (sekali)
 
-1. Di komputer:
-   ```bash
-   npm run build && npm run package
-   ```
-   Hasilnya `beasiswa-deploy.zip`. Paket ini tidak berisi rahasia apa pun.
-2. **cPanel → File Manager**:
-   - Buat folder `beasiswa-app` di home, **di luar `public_html`**.
-   - Unggah zip ke folder itu, lalu pilih **Extract**.
-   - Buat juga folder **`beasiswa-data/berkas`** di home untuk PDF peserta,
-     juga di luar `public_html`.
+**cPanel → Terminal**:
 
-### 4. Setup Node.js App
+```bash
+mkdir -p ~/repositories ~/beasiswa-data/berkas && chmod 700 ~/beasiswa-data ~/beasiswa-data/berkas
+```
+
+```bash
+cd ~/repositories && git clone --branch deploy --single-branch https://github.com/pribadi-school/BeasiswaPutraPutri.git beasiswa
+```
+
+Branch `deploy` berisi aplikasi yang **sudah di-build** oleh GitHub Actions
+setiap kali ada push ke `main`. Isinya tanpa rahasia apa pun. PDF peserta
+disimpan di `~/beasiswa-data/berkas`, di luar repo dan di luar `public_html`.
+
+### 4. File `.env` (sekali)
+
+Semua rahasia hanya ada di file ini, di server:
+
+```bash
+cd ~/repositories/beasiswa && cat > .env <<'EOF'
+NODE_ENV=production
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=pribadisch_beasiswa
+DB_USER=pribadisch_beasiswa
+DB_PASSWORD=GANTI_DENGAN_PASSWORD_DATABASE
+GOOGLE_CLIENT_ID=GANTI_DENGAN_CLIENT_ID.apps.googleusercontent.com
+UPLOAD_DIR=/home/pribadisch/beasiswa-data/berkas
+EOF
+chmod 600 .env
+```
+
+Lalu ganti dua nilai `GANTI_...` (dan nama database/user bila berbeda):
+
+```bash
+nano ~/repositories/beasiswa/.env
+```
+
+File `.env` diabaikan git, jadi tidak ikut tertimpa saat `git pull`.
+
+### 5. Setup Node.js App (sekali)
 
 **cPanel → Setup Node.js App → Create Application**:
 
@@ -132,66 +161,79 @@ Buka http://localhost:8787.
 |---|---|
 | Node.js version | versi tertinggi yang tersedia (minimal 20) |
 | Application mode | Production |
-| Application root | `beasiswa-app` |
+| Application root | `repositories/beasiswa` |
 | Application URL | `beasiswa.pribadidepok.sch.id` |
 | Application startup file | `server/app.cjs` |
 
-Lalu tambahkan **Environment variables** berikut:
+Environment variables tidak perlu diisi, karena sudah ada di `.env`. Klik
+**Create**.
 
-| Nama | Isi |
-|---|---|
-| `NODE_ENV` | `production` |
-| `DB_HOST` | `localhost` |
-| `DB_NAME` | nama database dari langkah 2 |
-| `DB_USER` | user database dari langkah 2 |
-| `DB_PASSWORD` | password user database |
-| `GOOGLE_CLIENT_ID` | Client ID dari langkah 1 |
-| `UPLOAD_DIR` | `/home/pribadisch/beasiswa-data/berkas` |
-
-Klik **Save**, lalu **Run NPM Install**, lalu **Restart**. Tabel database
-dibuat otomatis saat server pertama kali berjalan.
-
-### 5. Buat akun panitia
-
-Buka **cPanel → Terminal**. Perintah untuk masuk ke lingkungan Node aplikasi
-ditampilkan di bagian atas halaman Setup Node.js App, mirip ini:
+Kalau lebih suka lewat Terminal, perintah CloudLinux ini melakukan hal yang
+sama. Sesuaikan `--version` dengan versi Node yang tersedia di server:
 
 ```bash
-source /home/pribadisch/nodevenv/beasiswa-app/22/bin/activate && cd /home/pribadisch/beasiswa-app
+cloudlinux-selector create --json --interpreter nodejs --version 22 --app-root repositories/beasiswa --domain beasiswa.pribadidepok.sch.id --app-uri / --app-mode production --startup-file server/app.cjs
 ```
 
-Perintah admin membaca pengaturan database dari file `.env` di folder
-aplikasi. Isinya `DB_HOST`, `DB_NAME`, `DB_USER`, dan `DB_PASSWORD`, sama
-dengan langkah 4. Buat file itu sekali, lalu batasi aksesnya:
+Sesudah aplikasi dibuat, pasang paket dan jalankan server:
 
 ```bash
-nano .env && chmod 600 .env
+cd ~/repositories/beasiswa && bash deploy.sh
 ```
 
-Sesudah itu:
+`deploy.sh` mengerjakan beberapa hal:
+1. memakai Node milik aplikasi;
+2. menjalankan `npm install` (hanya paket server);
+3. memastikan folder PDF ada;
+4. memulai ulang server.
+
+Tabel database dibuat otomatis saat server mulai.
+
+### 6. Buat akun panitia
 
 ```bash
-npm run admin:set -- panitia@pribadidepok.sch.id
+source "$(ls -d ~/nodevenv/repositories/beasiswa/*/ | sort -V | tail -1)bin/activate" && cd ~/repositories/beasiswa && npm run admin:set -- panitia@pribadidepok.sch.id
 ```
 
-Password diminta di layar (minimal 10 karakter). Ulangi untuk setiap panitia.
-Perintah lain:
+Password diminta di layar (minimal 10 karakter) dan tidak tersimpan di
+riwayat terminal. Ulangi untuk setiap panitia. Perintah lain (setelah
+`source` di atas):
 - `npm run admin:set -- <email>`: mengganti password.
 - `npm run admin:remove -- <email>`: mencabut akses.
 - `npm run admin:list`: melihat daftar panitia.
 
-### 6. Selesai
+### 7. Cek
 
-Buka `https://beasiswa.pribadidepok.sch.id`, lalu coba masuk dengan Google
-dan masuk ke `/admin`.
+```bash
+curl -s https://beasiswa.pribadidepok.sch.id/api/settings
+```
+
+Perintah di atas harus menampilkan JSON yang memuat `"regOpen"`. Lalu buka
+`https://beasiswa.pribadidepok.sch.id`, coba masuk dengan Google, dan buka
+`/admin`.
+
+Kalau server tidak mau jalan, lihat log-nya:
+
+```bash
+tail -n 50 ~/repositories/beasiswa/stderr.log
+```
 
 ### Memperbarui aplikasi
 
-1. Jalankan `npm run build && npm run package`.
-2. Unggah zip baru ke `beasiswa-app`, lalu Extract dan timpa file lama.
-3. Di Setup Node.js App, klik **Restart**.
+1. Push perubahan ke `main`. GitHub Actions akan mem-build dan mengirimkannya
+   ke branch `deploy` dalam sekitar 1–2 menit (lihat tab **Actions** di
+   GitHub).
+2. Di **cPanel → Terminal**:
 
-Data MySQL dan PDF di `beasiswa-data` tidak tersentuh.
+```bash
+cd ~/repositories/beasiswa && git pull && bash deploy.sh
+```
+
+Data MySQL, `.env`, dan PDF di `~/beasiswa-data` tidak tersentuh.
+
+Cara manual tanpa GitHub Actions: jalankan `npm run deploy` di komputer. Ini
+juga mem-build dan mengirim ke branch `deploy`. Untuk paket zip (unggah lewat
+File Manager), jalankan `npm run build && npm run package`.
 
 ### Cadangan (backup)
 
@@ -244,7 +286,8 @@ sungguhan.
 | `npm run build` | type-check + build tampilan (`dist/`) dan server (`server-dist/`) |
 | `npm run local` | uji lengkap: MySQL sementara + server di http://localhost:8787 |
 | `npm run test:server` | uji server dengan MySQL sungguhan: login, kepemilikan data, validasi, PDF, jadwal, pengumuman, admin, CSRF |
-| `npm run package` | membuat `beasiswa-deploy.zip` untuk cPanel |
+| `npm run deploy` | build + kirim ke branch `deploy` (otomatis lewat GitHub Actions setiap push ke `main`) |
+| `npm run package` | membuat folder `deploy/` dan `beasiswa-deploy.zip` |
 | `npm run admin:set -- <email>` | membuat panitia / mengganti password |
 
 ## Mengubah aplikasi

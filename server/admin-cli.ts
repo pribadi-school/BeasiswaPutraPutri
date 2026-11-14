@@ -8,8 +8,11 @@
  * Membaca DB_* dari environment (.env di komputer; di cPanel jalankan dari Terminal
  * setelah `source` virtualenv Node aplikasi). Password TIDAK pernah ditulis ke file atau log.
  */
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createInterface } from 'node:readline';
 import bcrypt from 'bcryptjs';
 import type { RowDataPacket } from 'mysql2';
@@ -24,6 +27,11 @@ function askHidden(question: string): Promise<string> {
     rl.question(question, (answer) => { rl.close(); process.stdout.write('\n'); resolve(answer); });
   });
 }
+
+// .env di akar aplikasi (sama dengan yang dibaca server).
+const here = dirname(fileURLToPath(import.meta.url));
+const root = [resolve(here, '..'), resolve(here, '../..')].find((d) => existsSync(join(d, 'server', 'schema.sql'))) ?? process.cwd();
+dotenv.config({ path: join(root, '.env'), quiet: true });
 
 const [cmd, emailArg] = process.argv.slice(2);
 const cfg = loadConfig({ ...process.env, UPLOAD_DIR: process.env.UPLOAD_DIR || '-' });
