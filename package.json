@@ -1,0 +1,24 @@
+{
+  "name": "beasiswa-putra-putri-daerah",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Server Beasiswa Putra-Putri Daerah (paket deploy cPanel)",
+  "main": "server/app.cjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/app.cjs",
+    "admin:set": "node server-dist/server/admin-cli.js set",
+    "admin:remove": "node server-dist/server/admin-cli.js remove",
+    "admin:list": "node server-dist/server/admin-cli.js list"
+  },
+  "dependencies": {
+    "express": "^4.22.3",
+    "mysql2": "^3.24.6",
+    "bcryptjs": "^3.0.3",
+    "jose": "^6.2.17",
+    "dotenv": "^18.0.5"
+  }
+}
