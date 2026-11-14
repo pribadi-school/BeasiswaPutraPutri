@@ -26,8 +26,8 @@ const ADMIN_KEY = 'beasiswa-demo-admin';
 const files = new Map<string, string>();
 const ADMIN_PASSWORD = 'demo';
 
-/** Jadwal awal (sama dengan migrasi): 20 Nov 2026 00.00 WIB – 26 Des 2026 23.59 WIB. */
-const SCHEDULE = { regStart: '2026-11-19T17:00:00.000Z', regDeadline: '2026-12-26T16:59:00.000Z' };
+/** Penutupan awal (sama dengan migrasi): 26 Des 2026 23.59 WIB. Tanpa tanggal pembukaan. */
+const SCHEDULE = { regDeadline: '2026-12-26T16:59:00.000Z' };
 
 const fresh = (): DB => ({
   settings: {
@@ -43,8 +43,8 @@ const load = (): DB => {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const db = JSON.parse(raw) as DB;
-      // Data demo lama (sebelum ada tanggal pembukaan): pasang jadwal awal sekali.
-      if (!('regStart' in db.settings)) Object.assign(db.settings, SCHEDULE);
+      // Data demo lama yang masih punya tanggal pembukaan: buang (fitur itu dihapus).
+      if ('regStart' in db.settings) delete (db.settings as { regStart?: unknown }).regStart;
       return db;
     }
   } catch { /* abaikan */ }
@@ -65,7 +65,7 @@ const requireUser = (): AuthUser => {
 };
 
 const released = (s: AdminSettings) => !!s.announceAt && Date.parse(s.announceAt) <= Date.now();
-const open = (s: AdminSettings) => s.regOpen && (!s.regStart || Date.now() >= Date.parse(s.regStart))
+const open = (s: AdminSettings) => s.regOpen
   && (!s.regDeadline || Date.now() < Date.parse(s.regDeadline)) && !released(s);
 const dupKey = (p: Profile) => p.fullName.trim().toLowerCase() + '|' + p.birthDate;
 
@@ -95,7 +95,7 @@ export function createDemoApi(): Api {
       const { settings: s } = load();
       const rel = released(s);
       return {
-        now: new Date().toISOString(), regOpen: open(s), regStart: s.regStart, regDeadline: s.regDeadline, announceAt: s.announceAt,
+        now: new Date().toISOString(), regOpen: open(s), regDeadline: s.regDeadline, announceAt: s.announceAt,
         released: rel, title: rel ? s.title : null, body: rel ? s.body : null,
       };
     },
@@ -116,7 +116,7 @@ export function createDemoApi(): Api {
       return {
         applicant: a && { ...a, status: rel ? a.status : 'pending', document: undefined },
         canEdit: open(db.settings), released: rel,
-        announceAt: db.settings.announceAt, regStart: db.settings.regStart, regDeadline: db.settings.regDeadline, now: new Date().toISOString(),
+        announceAt: db.settings.announceAt, regDeadline: db.settings.regDeadline, now: new Date().toISOString(),
         title: rel ? db.settings.title : null, body: rel ? db.settings.body : null,
         resultMessage: rel && a && a.status !== 'pending' ? db.settings.resultMessages[a.status] ?? null : null,
         document: a?.document ?? null,
@@ -188,7 +188,6 @@ export function createDemoApi(): Api {
     },
     async adminSaveSettings(s) {
       requireAdmin();
-      if (s.regStart && s.regDeadline && Date.parse(s.regDeadline) <= Date.parse(s.regStart)) throw new AppError('INVALID', 'reg_deadline');
       if (s.announceAt && s.regDeadline && Date.parse(s.announceAt) < Date.parse(s.regDeadline)) throw new AppError('INVALID', 'announce_at');
       const db = load();
       db.settings = s;

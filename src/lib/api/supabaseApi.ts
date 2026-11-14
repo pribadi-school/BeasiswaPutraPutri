@@ -123,7 +123,7 @@ export function createSupabaseApi(url: string, key: string): Api {
     adminList: async () => (await rpc<Row[]>('admin_list')).map(toApplicant),
     adminGetSettings: () => rpc<AdminSettings>('admin_get_settings'),
     adminSaveSettings: (s) => rpc('admin_save_settings', {
-      p_reg_open: s.regOpen, p_reg_start: s.regStart, p_reg_deadline: s.regDeadline, p_announce_at: s.announceAt,
+      p_reg_open: s.regOpen, p_reg_deadline: s.regDeadline, p_announce_at: s.announceAt,
       p_title: s.title, p_body: s.body, p_result_messages: s.resultMessages,
     }),
     adminSetStatus: (ids, status) => rpc('admin_set_status', { p_ids: ids, p_status: status }),

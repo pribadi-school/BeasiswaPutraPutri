@@ -39,8 +39,8 @@ async function call(user: User | 'admin', fn: string, ...args: unknown[]) {
 const fails = (user: User | 'admin', fn: string, msg: RegExp, ...args: unknown[]) =>
   expect(call(user, fn, ...args)).rejects.toThrow(msg);
 
-const saveSettings = (announceAt: string | null, regOpen = true, regStart: string | null = null, regDeadline: string | null = null) =>
-  call('admin', 'admin_save_settings', regOpen, regStart, regDeadline, announceAt,
+const saveSettings = (announceAt: string | null, regOpen = true, regDeadline: string | null = null) =>
+  call('admin', 'admin_save_settings', regOpen, regDeadline, announceAt,
     JSON.stringify({ id: 'Judul', en: 'Title' }), JSON.stringify({ id: 'Isi', en: 'Body' }),
     JSON.stringify({ lulus: { id: 'Selamat', en: 'Congrats' } }));
 
@@ -64,32 +64,30 @@ beforeAll(async () => {
   const missing = (await db.query(`select public.set_admins($1) as r`, [[ADMIN.email, 'belum.konfirmasi@example.com', 'tidak.ada@example.com']])).rows[0].r;
   expect(missing).toEqual(['belum.konfirmasi@example.com', 'tidak.ada@example.com']);
 
-  // Jadwal awal dari migrasi: 20 Nov 2026 00.00 WIB – 26 Des 2026 23.59 WIB (dan tidak ditimpa saat migrasi diulang).
-  const { rows } = await db.query(`select reg_start, reg_deadline from private.settings`);
-  expect(rows[0].reg_start.toISOString()).toBe('2026-11-19T17:00:00.000Z');
+  // Jadwal awal dari migrasi: tanpa tanggal pembukaan, ditutup 26 Des 2026 23.59 WIB.
+  const { rows } = await db.query(`select * from private.settings`);
+  expect('reg_start' in rows[0]).toBe(false);
   expect(rows[0].reg_deadline.toISOString()).toBe('2026-12-26T16:59:00.000Z');
-  // Tes berikut berjalan tanpa jadwal (pendaftaran dibuka sekarang).
+  // Tes berikut berjalan tanpa batas penutupan.
   await saveSettings(null);
 }, 180_000);
 
 describe('jadwal pendaftaran', () => {
-  it('sebelum tanggal pembukaan: belum bisa mendaftar', async () => {
-    const future = new Date(Date.now() + 3 * 86_400_000).toISOString();
-    await saveSettings(null, true, future, new Date(Date.now() + 30 * 86_400_000).toISOString());
-    const pub = await call(null, 'get_public_settings');
-    expect(pub.regOpen).toBe(false);
-    expect(pub.regStart).toBeTruthy();
-    await fails(newUser(), 'register', /CLOSED/, JSON.stringify(profile({ full_name: 'Terlalu Awal' })), 'id');
+  it('tanpa tanggal pembukaan: langsung bisa mendaftar sampai penutupan', async () => {
+    await saveSettings(null, true, new Date(Date.now() + 30 * 86_400_000).toISOString());
+    expect((await call(null, 'get_public_settings')).regOpen).toBe(true);
+    await call(newUser(), 'register', JSON.stringify(profile({ full_name: 'Daftar Langsung' })), 'id');
+  });
+
+  it('setelah penutupan: tidak bisa mendaftar', async () => {
+    await saveSettings(null, true, new Date(Date.now() - 1000).toISOString());
+    expect((await call(null, 'get_public_settings')).regOpen).toBe(false);
+    await fails(newUser(), 'register', /CLOSED/, JSON.stringify(profile({ full_name: 'Terlambat Tutup' })), 'id');
     await saveSettings(null);
   });
 
-  it('batas penutupan harus sesudah tanggal pembukaan', async () => {
-    await fails('admin', 'admin_save_settings', /INVALID:reg_deadline/, true, '2026-12-26T00:00:00Z', '2026-11-20T00:00:00Z', null,
-      JSON.stringify({ id: '', en: '' }), JSON.stringify({ id: '', en: '' }), '{}');
-  });
-
   it('pengumuman tidak boleh sebelum penutupan pendaftaran', async () => {
-    await fails('admin', 'admin_save_settings', /INVALID:announce_at/, true, '2026-11-19T17:00:00Z', '2026-12-26T16:59:00Z', '2026-12-01T00:00:00Z',
+    await fails('admin', 'admin_save_settings', /INVALID:announce_at/, true, '2026-12-26T16:59:00Z', '2026-12-01T00:00:00Z',
       JSON.stringify({ id: '', en: '' }), JSON.stringify({ id: '', en: '' }), '{}');
   });
 });

@@ -45,14 +45,13 @@ create table if not exists private.settings (
   result_messages  jsonb not null default '{}'
 );
 insert into private.settings (id) values (1) on conflict do nothing;
--- Tanggal pembukaan pendaftaran (sebelum ini belum bisa mendaftar).
-alter table private.settings add column if not exists reg_start timestamptz;
--- Jadwal awal (sekali saja; sesudahnya diatur panitia di Admin → Pengaturan):
--- dibuka 20 Nov 2026 00.00 WIB, ditutup 26 Des 2026 23.59 WIB.
+-- Tidak ada tanggal pembukaan: pendaftaran dibuka sejak aplikasi aktif.
+alter table private.settings drop column if exists reg_start;
+-- Penutupan awal (sekali saja; sesudahnya diatur panitia di Admin → Pengaturan):
+-- 26 Des 2026 23.59 WIB.
 alter table private.settings add column if not exists schedule_seeded boolean not null default false;
 update private.settings
-   set reg_start = timestamptz '2026-11-20 00:00:00+07',
-       reg_deadline = timestamptz '2026-12-26 23:59:00+07',
+   set reg_deadline = timestamptz '2026-12-26 23:59:00+07',
        schedule_seeded = true
  where id = 1 and not schedule_seeded;
 
@@ -139,7 +138,7 @@ drop function if exists public.set_admin_password(text);
 drop function if exists public.admin_list(text);
 drop function if exists public.admin_get_settings(text);
 drop function if exists public.admin_save_settings(text, boolean, timestamptz, timestamptz, jsonb, jsonb, jsonb);
-drop function if exists public.admin_save_settings(boolean, timestamptz, timestamptz, jsonb, jsonb, jsonb);
+drop function if exists public.admin_save_settings(boolean, timestamptz, timestamptz, timestamptz, jsonb, jsonb, jsonb);
 drop function if exists public.admin_set_status(text, uuid[], text);
 drop function if exists public.admin_delete(text, uuid);
 drop function if exists private.require_admin(text);
@@ -292,7 +291,7 @@ end $$;
 -- Boleh mendaftar/mengubah data sekarang?
 create or replace function private.registration_open() returns boolean
 language sql stable set search_path = '' as $$
-  select reg_open and (reg_start is null or now() >= reg_start)
+  select reg_open
      and (reg_deadline is null or now() < reg_deadline) and not private.released()
     from private.settings where id = 1
 $$;
@@ -330,7 +329,6 @@ language sql stable security definer set search_path = '' as $$
   select json_build_object(
     'now', now(),
     'regOpen', private.registration_open(),
-    'regStart', s.reg_start,
     'regDeadline', s.reg_deadline,
     'announceAt', s.announce_at,
     'released', private.released(),
@@ -393,7 +391,6 @@ begin
     'canEdit', private.registration_open(),
     'released', private.released(),
     'announceAt', s.announce_at,
-    'regStart', s.reg_start,
     'regDeadline', s.reg_deadline,
     'now', now(),
     'title', case when private.released() then s.announce_title end,
@@ -480,12 +477,12 @@ declare s private.settings;
 begin
   perform private.require_admin();
   select * into s from private.settings where id = 1;
-  return json_build_object('regOpen', s.reg_open, 'regStart', s.reg_start, 'regDeadline', s.reg_deadline, 'announceAt', s.announce_at,
+  return json_build_object('regOpen', s.reg_open, 'regDeadline', s.reg_deadline, 'announceAt', s.announce_at,
     'title', s.announce_title, 'body', s.announce_body, 'resultMessages', s.result_messages, 'now', now());
 end $$;
 
 create or replace function public.admin_save_settings(
-  p_reg_open boolean, p_reg_start timestamptz, p_reg_deadline timestamptz, p_announce_at timestamptz,
+  p_reg_open boolean, p_reg_deadline timestamptz, p_announce_at timestamptz,
   p_title jsonb, p_body jsonb, p_result_messages jsonb
 ) returns void
 language plpgsql security definer set search_path = '' as $$
@@ -497,13 +494,10 @@ begin
   if length(p_title::text) > 1000 or length(p_body::text) > 20000 or length(p_result_messages::text) > 20000 then
     perform private.invalid('settings');
   end if;
-  if p_reg_start is not null and p_reg_deadline is not null and p_reg_deadline <= p_reg_start then
-    perform private.invalid('reg_deadline');
-  end if;
   if p_announce_at is not null and p_reg_deadline is not null and p_announce_at < p_reg_deadline then
     perform private.invalid('announce_at');
   end if;
-  update private.settings set reg_open = p_reg_open, reg_start = p_reg_start, reg_deadline = p_reg_deadline, announce_at = p_announce_at,
+  update private.settings set reg_open = p_reg_open, reg_deadline = p_reg_deadline, announce_at = p_announce_at,
     announce_title = p_title, announce_body = p_body, result_messages = p_result_messages
   where id = 1;
 end $$;
@@ -596,7 +590,7 @@ revoke all on function
   public.register(jsonb, text), public.me(), public.update_profile(jsonb),
   public.my_document_path(), public.document_upload_allowed(), public.am_i_admin(),
   public.admin_list(), public.admin_get_settings(),
-  public.admin_save_settings(boolean, timestamptz, timestamptz, timestamptz, jsonb, jsonb, jsonb),
+  public.admin_save_settings(boolean, timestamptz, timestamptz, jsonb, jsonb, jsonb),
   public.admin_set_status(uuid[], text), public.admin_delete(uuid)
 from public;
 do $$
@@ -614,7 +608,7 @@ begin
       public.register(jsonb, text), public.me(), public.update_profile(jsonb),
       public.my_document_path(), public.document_upload_allowed(), public.am_i_admin(),
       public.admin_list(), public.admin_get_settings(),
-      public.admin_save_settings(boolean, timestamptz, timestamptz, timestamptz, jsonb, jsonb, jsonb),
+      public.admin_save_settings(boolean, timestamptz, timestamptz, jsonb, jsonb, jsonb),
       public.admin_set_status(uuid[], text), public.admin_delete(uuid)
     to authenticated;
   end if;

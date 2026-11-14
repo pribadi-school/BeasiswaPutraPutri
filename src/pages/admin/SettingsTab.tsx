@@ -31,7 +31,6 @@ export function SettingsTab() {
   const { t } = useI18n();
   const errText = useErrorText();
   const [s, setS] = useState<AdminSettings | null>(null);
-  const [start, setStart] = useState('');
   const [deadline, setDeadline] = useState('');
   const [announce, setAnnounce] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +38,7 @@ export function SettingsTab() {
 
   useEffect(() => {
     api.adminGetSettings().then((r) => {
-      setS(r); setStart(toInputWib(r.regStart)); setDeadline(toInputWib(r.regDeadline)); setAnnounce(toInputWib(r.announceAt));
+      setS(r); setDeadline(toInputWib(r.regDeadline)); setAnnounce(toInputWib(r.announceAt));
     }).catch((e) => { if (e instanceof AppError && e.code === 'UNAUTHORIZED') onExpired(); else setError(errText(e)); });
   }, [onExpired, errText]);
 
@@ -50,13 +49,11 @@ export function SettingsTab() {
   async function save() {
     if (!s) return;
     setError(null); setSaved(false);
-    const regStart = fromInputWib(start);
     const regDeadline = fromInputWib(deadline);
     const announceAt = fromInputWib(announce);
-    if (regStart && regDeadline && Date.parse(regDeadline) <= Date.parse(regStart)) { setError(t('set.badRange')); return; }
     if (announceAt && regDeadline && Date.parse(announceAt) < Date.parse(regDeadline)) { setError(t('set.badAnnounce')); return; }
     try {
-      await api.adminSaveSettings({ ...s, regStart, regDeadline, announceAt });
+      await api.adminSaveSettings({ ...s, regDeadline, announceAt });
       setSaved(true);
     } catch (e) {
       if (e instanceof AppError && e.code === 'UNAUTHORIZED') onExpired(); else setError(errText(e));
@@ -71,9 +68,6 @@ export function SettingsTab() {
           <input type="checkbox" checked={s.regOpen} onChange={(e) => setS({ ...s, regOpen: e.target.checked })} className="size-6 accent-action" />
           <span className="font-semibold text-foreground">{t('set.regOpen')}</span>
         </label>
-        <Field id="start" label={t('set.regStart')}>
-          <input id="start" type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} className={inputCls} />
-        </Field>
         <Field id="deadline" label={t('set.regDeadline')}>
           <input id="deadline" type="datetime-local" value={deadline} onChange={(e) => setDeadline(e.target.value)} className={inputCls} />
         </Field>

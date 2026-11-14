@@ -32,12 +32,12 @@ Indonesia + Inggris.
   mendaftar dan bisa diganti di *Data saya* sampai batas waktu. Aplikasi
   memeriksa isinya benar-benar PDF (diawali `%PDF-`). Supabase Storage
   menolak file selain PDF dan file di atas 10 MB.
-- **Jadwal pendaftaran**: dibuka **20 November 2026, 00.00 WIB** dan ditutup
-  **26 Desember 2026, 23.59 WIB**. Sebelum dibuka, orang tua bisa masuk
-  tetapi formulir belum tampil. Sesudah ditutup, data dan berkas tidak bisa
-  diubah. Jadwal ini dipasang sekali oleh migrasi, lalu diatur panitia di
-  **Admin → Pengaturan** (migrasi berikutnya tidak menimpanya). Waktu
-  pengumuman harus sesudah penutupan.
+- **Jadwal pendaftaran**: tanpa tanggal pembukaan. Pendaftaran langsung
+  dibuka begitu aplikasi aktif, dan **ditutup 26 Desember 2026, 23.59 WIB**.
+  Sesudah ditutup, data dan berkas tidak bisa diubah. Penutupan dipasang sekali
+  oleh migrasi, lalu diatur panitia di **Admin → Pengaturan** (bersama saklar
+  "Pendaftaran aktif" untuk menutup sementara). Waktu pengumuman harus sesudah
+  penutupan.
 - **Formulir bertahap** (5 langkah, ada penanda kemajuan). Isian **tersimpan
   otomatis di HP** sebagai draf, jadi tidak hilang kalau tab tertutup atau
   sinyal putus. Berkas PDF tidak ikut disimpan. Demi privasi, draf dihapus
