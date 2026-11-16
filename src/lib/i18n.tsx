@@ -4,7 +4,7 @@ import type { Lang } from './types';
 
 const id = {
   'app.name': 'Beasiswa Putra-Putri Daerah',
-  'app.school': 'SD–SMP–SMA Pribadi Depok',
+  'app.school': 'SMP–SMA Pribadi Depok',
   'app.skip': 'Lewati ke konten',
   'nav.login': 'Masuk',
   'nav.register': 'Daftar',
@@ -284,7 +284,7 @@ const id = {
 
 const en: Record<keyof typeof id, string> = {
   'app.name': 'Beasiswa Putra-Putri Daerah', // nama merek: sama di semua bahasa
-  'app.school': 'SD–SMP–SMA Pribadi Depok',
+  'app.school': 'SMP–SMA Pribadi Depok',
   'app.skip': 'Skip to content',
   'nav.login': 'Log in',
   'nav.register': 'Register',

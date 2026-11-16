@@ -1,6 +1,6 @@
 -- =============================================================================
 -- Beasiswa Putra-Putri Daerah — skema MySQL / MariaDB
--- SD–SMP–SMA Pribadi Depok
+-- SMP–SMA Pribadi Depok
 --
 -- Dijalankan otomatis oleh server setiap kali mulai (aman diulang; tidak
 -- menghapus data). Cocok untuk MySQL 8 dan MariaDB 10.4+ (cPanel): tidak memakai

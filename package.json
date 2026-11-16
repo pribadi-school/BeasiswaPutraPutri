@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Pendaftaran Beasiswa Putra-Putri Daerah SD–SMP–SMA Pribadi Depok (React + Node.js + MySQL)",
+  "description": "Pendaftaran Beasiswa Putra-Putri Daerah SMP–SMA Pribadi Depok (React + Node.js + MySQL)",
   "scripts": {
     "dev": "vite",
     "dev:server": "VITE_BACKEND=server vite",

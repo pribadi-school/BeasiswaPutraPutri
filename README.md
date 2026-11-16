@@ -1,4 +1,4 @@
-# Beasiswa Putra-Putri Daerah — SD–SMP–SMA Pribadi Depok
+# Beasiswa Putra-Putri Daerah — SMP–SMA Pribadi Depok
 
 Aplikasi web pendaftaran beasiswa. Orang tua/wali **masuk dengan akun Google
 (Gmail)**, lalu mengisi data anak. Dengan akun Google yang sama mereka bisa
