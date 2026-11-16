@@ -12,13 +12,15 @@
     "start": "node server/app.cjs",
     "admin:set": "node server-dist/server/admin-cli.js set",
     "admin:remove": "node server-dist/server/admin-cli.js remove",
-    "admin:list": "node server-dist/server/admin-cli.js list"
+    "admin:list": "node server-dist/server/admin-cli.js list",
+    "notify": "node server-dist/server/notify-cli.js"
   },
   "dependencies": {
     "express": "^4.22.3",
     "mysql2": "^3.24.6",
     "bcryptjs": "^3.0.3",
     "jose": "^6.2.17",
-    "dotenv": "^18.0.5"
+    "dotenv": "^18.0.5",
+    "nodemailer": "^10.6.0"
   }
 }

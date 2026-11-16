@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import mysql from 'mysql2/promise';
+import { DEFAULT_ANNOUNCE_AT, defaultStages } from '../src/lib/schedule.js';
 export function createPool(cfg) {
     return mysql.createPool({
         ...cfg,
@@ -22,6 +23,8 @@ const ADDED_COLUMNS = [
     ['applicants', 'res_interview', `ENUM('pending','lulus','tidak_lulus') NOT NULL DEFAULT 'pending'`],
     // Pengaturan per tahap (JSON): waktu umum, info/jadwal, pesan lolos/tidak lolos.
     ['settings', 'stages', 'TEXT NULL'],
+    // Jadwal tahapan awal sudah dipasang (lihat src/lib/schedule.ts).
+    ['settings', 'stages_seeded', 'TINYINT(1) NOT NULL DEFAULT 0'],
 ];
 /** Menjalankan server/schema.sql lalu menambah kolom yang belum ada (aman diulang). */
 export async function migrate(pool, schemaPath) {
@@ -38,6 +41,10 @@ export async function migrate(pool, schemaPath) {
             if (!rows.length)
                 await conn.query(`ALTER TABLE \`${table}\` ADD COLUMN \`${column}\` ${ddl}`);
         }
+        // Jadwal tahapan awal: sekali saja, dan hanya mengisi yang masih kosong
+        // (tidak menimpa yang sudah diatur panitia).
+        await conn.query(`UPDATE settings SET announce_at = COALESCE(announce_at, ?), stages = COALESCE(stages, ?), stages_seeded = 1
+        WHERE id = 1 AND stages_seeded = 0`, [new Date(DEFAULT_ANNOUNCE_AT), JSON.stringify(defaultStages())]);
     }
     finally {
         conn.release();

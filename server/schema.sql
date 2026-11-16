@@ -113,6 +113,17 @@ CREATE TABLE IF NOT EXISTS sessions (
   KEY sessions_subject (subject_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Email pemberitahuan yang sudah dikirim (atau sedang dikirim): satu baris per
+-- pendaftar per jenis, supaya tiap email hanya terkirim sekali.
+-- kind: registered | admin | test | interview | final
+CREATE TABLE IF NOT EXISTS notifications (
+  applicant_id  CHAR(36)     NOT NULL,
+  kind          VARCHAR(20)  NOT NULL,
+  sent_at       DATETIME(3)  NOT NULL,
+  PRIMARY KEY (applicant_id, kind),
+  CONSTRAINT notifications_applicant_fk FOREIGN KEY (applicant_id) REFERENCES applicants (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- Percobaan login admin yang gagal (pembatasan tebak password).
 CREATE TABLE IF NOT EXISTS login_failures (
   k   VARCHAR(255) NOT NULL,

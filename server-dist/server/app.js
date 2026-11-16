@@ -25,6 +25,8 @@ import bcrypt from 'bcryptjs';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { cleanProfile, coerceProfile, validateProfile } from '../src/lib/validate.js';
 import { STAGE_RESULTS, STAGES } from '../src/lib/types.js';
+import { iso, loadSettings as loadSettingsFrom, registrationOpen, released, STAGE_COLUMN, } from './settings.js';
+import { notificationStatus, runNotifications, smtpMailer } from './notify.js';
 const MAX_PDF = 10 * 1024 * 1024;
 const STATUSES = ['pending', 'lulus', 'cadangan', 'tidak_lulus'];
 const COOKIE = { user: 'bpd_user', admin: 'bpd_admin' };
@@ -41,20 +43,7 @@ class HttpError extends Error {
         this.field = field;
     }
 }
-/** Kolom hasil per tahap (nama kolom tetap — tidak pernah dari input). */
-const STAGE_COLUMN = { admin: 'res_admin', test: 'res_test', interview: 'res_interview' };
 const sha256 = (s) => createHash('sha256').update(s).digest('hex');
-const iso = (d) => (d ? d.toISOString() : null);
-const parseJson = (s, fallback) => {
-    if (typeof s !== 'string')
-        return s ?? fallback;
-    try {
-        return JSON.parse(s);
-    }
-    catch {
-        return fallback;
-    }
-};
 function readCookies(req) {
     const out = {};
     for (const part of (req.headers.cookie ?? '').split(';')) {
@@ -64,7 +53,7 @@ function readCookies(req) {
     }
     return out;
 }
-export function createApp({ pool, cfg, verifyGoogle }) {
+export function createApp({ pool, cfg, verifyGoogle, mailer }) {
     const app = express();
     app.disable('x-powered-by');
     app.set('trust proxy', 'loopback'); // di cPanel, Passenger meneruskan dari localhost
@@ -152,35 +141,8 @@ export function createApp({ pool, cfg, verifyGoogle }) {
         return id;
     }
     // ---- Pengaturan & jadwal ----------------------------------------------------
-    async function loadSettings() {
-        const [rows] = await pool.execute('SELECT * FROM settings WHERE id = 1');
-        const r = rows[0];
-        return {
-            regOpen: !!r.reg_open,
-            regDeadline: r.reg_deadline ?? null,
-            announceAt: r.announce_at ?? null,
-            title: parseJson(r.announce_title, { id: '', en: '' }),
-            body: parseJson(r.announce_body, { id: '', en: '' }),
-            resultMessages: parseJson(r.result_messages, {}),
-            stages: parseStages(r.stages),
-        };
-    }
-    function parseStages(raw) {
-        const src = parseJson(raw, {});
-        const loc = (v) => {
-            const o = (v && typeof v === 'object' ? v : {});
-            return { id: typeof o.id === 'string' ? o.id : '', en: typeof o.en === 'string' ? o.en : '' };
-        };
-        const out = {};
-        for (const k of STAGES) {
-            const s = src[k] ?? {};
-            const d = typeof s.publishAt === 'string' ? new Date(s.publishAt) : null;
-            out[k] = { publishAt: d && !Number.isNaN(d.getTime()) ? d : null, info: loc(s.info), pass: loc(s.pass), fail: loc(s.fail) };
-        }
-        return out;
-    }
     const stagesJson = (st) => Object.fromEntries(STAGES.map((k) => [k, { ...st[k], publishAt: iso(st[k].publishAt) }]));
-    const released = (s, now = new Date()) => !!s.announceAt && s.announceAt <= now;
+    const loadSettings = () => loadSettingsFrom(pool);
     /** Hasil tahap terlihat peserta hanya setelah waktu umumnya. */
     function stageViews(s, a, now = new Date()) {
         return STAGES.map((key) => {
@@ -193,7 +155,6 @@ export function createApp({ pool, cfg, verifyGoogle }) {
             };
         });
     }
-    const registrationOpen = (s, now = new Date()) => s.regOpen && (!s.regDeadline || now < s.regDeadline) && !released(s, now);
     // ---- Data pendaftar ---------------------------------------------------------
     function applicantJson(r, showStatus, admin = false) {
         return {
@@ -531,6 +492,18 @@ export function createApp({ pool, cfg, verifyGoogle }) {
         await rm(pdfPath(id), { force: true });
         await pool.execute('DELETE FROM applicants WHERE id = ?', [id]);
         res.json({ ok: true });
+    }));
+    // ---- Email pemberitahuan -----------------------------------------------------
+    const send = mailer ?? (cfg.smtp ? smtpMailer(cfg.smtp) : null);
+    app.get('/api/admin/notify', h(async (req, res) => {
+        await requireAdmin(req);
+        res.json(await notificationStatus(pool, !!send));
+    }));
+    app.post('/api/admin/notify', h(async (req, res) => {
+        await requireAdmin(req);
+        if (!send)
+            throw new HttpError(503, 'MAIL_NOT_CONFIGURED');
+        res.json(await runNotifications(pool, cfg, send));
     }));
     app.use('/api', (_req, _res, next) => next(new HttpError(404, 'NOT_FOUND')));
     // ---- Tampilan (hasil build dist/), untuk semua alamat selain /api ----------
