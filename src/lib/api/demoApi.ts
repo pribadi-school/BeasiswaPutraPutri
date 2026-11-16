@@ -32,7 +32,7 @@ const SCHEDULE = { regDeadline: '2026-12-26T16:59:00.000Z' };
 const fresh = (): DB => ({
   settings: {
     regOpen: true, ...SCHEDULE, announceAt: null,
-    title: { id: 'Pengumuman Beasiswa Putra-Putri Daerah', en: 'Regional Scholarship Announcement' },
+    title: { id: 'Pengumuman Beasiswa Putra-Putri Daerah', en: 'Beasiswa Putra-Putri Daerah Announcement' },
     body: { id: '', en: '' }, resultMessages: {},
   },
   applicants: [], adminFailures: [],

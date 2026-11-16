@@ -283,7 +283,7 @@ const id = {
 } as const;
 
 const en: Record<keyof typeof id, string> = {
-  'app.name': 'Regional Scholarship Program',
+  'app.name': 'Beasiswa Putra-Putri Daerah', // nama merek: sama di semua bahasa
   'app.school': 'SD–SMP–SMA Pribadi Depok',
   'app.skip': 'Skip to content',
   'nav.login': 'Log in',
@@ -302,7 +302,7 @@ const en: Record<keyof typeof id, string> = {
   'footer.privacy': 'Your data is seen only by the scholarship committee and is not shared with anyone else.',
   'demo.banner': 'DEMO MODE: data is stored only in this browser. Admin: any email, password demo.',
 
-  'home.title': 'Regional Scholarship Program',
+  'home.title': 'Beasiswa Putra-Putri Daerah',
   'home.lead': 'Log in with a Google (Gmail) account, fill in the child’s details, then log in any time to complete your data and see the result on announcement day.',
   'home.step1.t': 'Log in with Google',
   'home.step1.d': 'Use the parent/guardian’s Gmail account. No new password needed.',
