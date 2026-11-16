@@ -25,7 +25,12 @@ CREATE TABLE IF NOT EXISTS settings (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 INSERT IGNORE INTO settings (id, announce_title, announce_body, result_messages)
-VALUES (1, '{"id":"Pengumuman Beasiswa Putra-Putri Daerah","en":"Regional Scholarship Announcement"}', '{"id":"","en":""}', '{}');
+VALUES (1, '{"id":"Pengumuman Beasiswa Putra-Putri Daerah","en":"Beasiswa Putra-Putri Daerah Announcement"}', '{"id":"","en":""}', '{}');
+
+-- Nama merek "Beasiswa Putra-Putri Daerah" dipakai juga di versi Inggris. Judul bawaan
+-- lama diganti hanya bila belum diubah panitia.
+UPDATE settings SET announce_title = '{"id":"Pengumuman Beasiswa Putra-Putri Daerah","en":"Beasiswa Putra-Putri Daerah Announcement"}'
+ WHERE id = 1 AND announce_title = '{"id":"Pengumuman Beasiswa Putra-Putri Daerah","en":"Regional Scholarship Announcement"}';
 
 -- Penutupan awal (sekali saja; sesudahnya diatur panitia di Admin → Pengaturan):
 -- 26 Des 2026 23.59 WIB = 16.59 UTC.
