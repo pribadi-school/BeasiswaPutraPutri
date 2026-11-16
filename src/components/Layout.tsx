@@ -36,10 +36,6 @@ export function Layout() {
       <main id="main" className="mx-auto w-full max-w-5xl flex-1 px-4 pb-8">
         <Outlet />
       </main>
-      <footer className="no-print px-4 py-5 text-center text-sm text-muted-foreground">
-        <p>{t('footer.privacy')}</p>
-        <Link to="/admin" className="mt-1 inline-block min-h-11 py-2 underline">{t('footer.admin')}</Link>
-      </footer>
     </div>
   );
 }

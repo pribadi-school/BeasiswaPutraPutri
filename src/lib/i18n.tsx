@@ -19,7 +19,6 @@ const id = {
   'common.cancel': 'Batal',
   'common.retry': 'Coba lagi',
   'common.none': '—',
-  'footer.admin': 'Admin',
   'footer.privacy': 'Data Anda hanya dilihat panitia beasiswa dan tidak dibagikan ke pihak lain.',
   'demo.banner': 'MODE DEMO: data hanya tersimpan di browser ini. Admin: email apa saja, password demo.',
 
@@ -300,7 +299,6 @@ const en: Record<keyof typeof id, string> = {
   'common.cancel': 'Cancel',
   'common.retry': 'Try again',
   'common.none': '—',
-  'footer.admin': 'Admin',
   'footer.privacy': 'Your data is seen only by the scholarship committee and is not shared with anyone else.',
   'demo.banner': 'DEMO MODE: data is stored only in this browser. Admin: any email, password demo.',
 
