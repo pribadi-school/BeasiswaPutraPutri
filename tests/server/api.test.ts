@@ -214,6 +214,64 @@ describe('jadwal dan pengumuman', () => {
   });
 });
 
+describe('tahapan seleksi (Administrasi → Tes → Interview)', () => {
+  const later = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
+  const stages = (admin: string | null, test: string | null = null, interview: string | null = null) => ({
+    admin: { publishAt: admin, info: { id: 'Info adm', en: 'Adm info' }, pass: { id: 'Lolos adm', en: 'Passed' }, fail: { id: 'Tidak lolos adm', en: 'Failed' } },
+    test: { publishAt: test, info: { id: 'Tes 10 Jan, 08.00', en: 'Test Jan 10' }, pass: { id: 'Lolos tes', en: '' }, fail: { id: 'Tidak lolos tes', en: '' } },
+    interview: { publishAt: interview, info: { id: '', en: '' }, pass: { id: '', en: '' }, fail: { id: '', en: '' } },
+  });
+
+  it('hasil tahap tersembunyi sebelum waktu umumnya; info tahap selalu terlihat', async () => {
+    const p = await parent();
+    await p.post('/api/me/register', { profile: profile({ fullName: 'Anak Tahapan' }) });
+    const a = await admin();
+    const row = (await a.get('/api/admin/applicants')).data.find((x: { fullName: string }) => x.fullName === 'Anak Tahapan');
+    expect(row.stages).toEqual({ admin: 'pending', test: 'pending', interview: 'pending' });
+
+    await settings({ stages: stages(later(1), later(2)) });
+    expect((await a.post('/api/admin/status', { ids: [row.id], stage: 'admin', status: 'lulus' })).data.updated).toBe(1);
+    expect((await a.post('/api/admin/status', { ids: [row.id], stage: 'test', status: 'tidak_lulus' })).data.updated).toBe(1);
+    expect((await a.get('/api/admin/applicants')).data.find((x: { id: string }) => x.id === row.id).stages)
+      .toEqual({ admin: 'lulus', test: 'tidak_lulus', interview: 'pending' });
+
+    let st = (await p.get('/api/me')).data.stages;
+    expect(st.map((s: { key: string }) => s.key)).toEqual(['admin', 'test', 'interview']);
+    expect(st[0]).toMatchObject({ released: false, result: null, message: null, info: { id: 'Info adm', en: 'Adm info' } });
+
+    // Waktu umum administrasi lewat: hasil + pesan lolos terlihat; tes belum.
+    await settings({ stages: stages(new Date(Date.now() - 1000).toISOString(), later(2)) });
+    st = (await p.get('/api/me')).data.stages;
+    expect(st[0]).toMatchObject({ released: true, result: 'lulus', message: { id: 'Lolos adm', en: 'Passed' } });
+    expect(st[1]).toMatchObject({ released: false, result: null, message: null });
+
+    await settings({ stages: stages(new Date(Date.now() - 2000).toISOString(), new Date(Date.now() - 1000).toISOString()) });
+    st = (await p.get('/api/me')).data.stages;
+    expect(st[1]).toMatchObject({ released: true, result: 'tidak_lulus', message: { id: 'Tidak lolos tes' } });
+    expect(st[2]).toMatchObject({ released: false, result: null });
+    await settings();
+  });
+
+  it('waktu umum tahap harus urut dan tidak sesudah pengumuman akhir', async () => {
+    const a = await admin();
+    const base = { regOpen: true, regDeadline: null, title: {}, body: {}, resultMessages: {} };
+    let r = await a.put('/api/admin/settings', { ...base, announceAt: null, stages: stages(later(5), later(3)) });
+    expect([r.status, r.data.field]).toEqual([400, 'stage_order']);
+    r = await a.put('/api/admin/settings', { ...base, announceAt: later(2), stages: stages(later(1), later(3)) });
+    expect([r.status, r.data.field]).toEqual([400, 'stage_order']);
+    r = await a.put('/api/admin/settings', { ...base, announceAt: later(9), stages: stages(later(1), null, later(3)) });
+    expect(r.status).toBe(200);
+    await settings();
+  });
+
+  it('hasil tahap hanya lulus/tidak_lulus/pending; tahap tidak dikenal ditolak', async () => {
+    const a = await admin();
+    const row = (await a.get('/api/admin/applicants')).data[0];
+    expect((await a.post('/api/admin/status', { ids: [row.id], stage: 'test', status: 'cadangan' })).data.field).toBe('status');
+    expect((await a.post('/api/admin/status', { ids: [row.id], stage: 'res_admin', status: 'lulus' })).data.field).toBe('stage');
+  });
+});
+
 describe('admin', () => {
   it('peserta biasa dan tamu tidak bisa memakai fungsi admin', async () => {
     const p = await parent();

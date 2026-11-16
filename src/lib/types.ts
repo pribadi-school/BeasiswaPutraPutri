@@ -3,8 +3,43 @@
 export type Lang = 'id' | 'en';
 /** Jenjang yang dituju. SD tidak dibuka untuk beasiswa ini. */
 export type Level = 'smp' | 'sma';
+/** Hasil akhir (tahap Pengumuman). */
 export type Status = 'pending' | 'lulus' | 'cadangan' | 'tidak_lulus';
 export const STATUSES: Status[] = ['pending', 'lulus', 'cadangan', 'tidak_lulus'];
+
+/**
+ * Alur seleksi: Pendaftaran → Seleksi Administrasi → Tes Akademik & Tes IQ →
+ * Interview → Pengumuman. Tiga tahap di tengah punya hasil lolos/tidak lolos
+ * sendiri yang baru terlihat peserta setelah waktu umumnya (publishAt).
+ */
+export type StageKey = 'admin' | 'test' | 'interview';
+export const STAGES: StageKey[] = ['admin', 'test', 'interview'];
+export type StageResult = 'pending' | 'lulus' | 'tidak_lulus';
+export const STAGE_RESULTS: StageResult[] = ['pending', 'lulus', 'tidak_lulus'];
+
+/** Pengaturan satu tahap (diatur panitia). */
+export type StageSettings = {
+  /** Kapan hasil tahap ini terlihat peserta (null = belum dijadwalkan). */
+  publishAt: string | null;
+  /** Info/jadwal tahap, mis. "Sabtu 10 Jan 2027, 08.00 WIB, di SMP Pribadi Depok". */
+  info: Localized;
+  /** Pesan untuk yang lolos / tidak lolos tahap ini. */
+  pass: Localized;
+  fail: Localized;
+};
+
+/** Yang dilihat peserta untuk satu tahap. */
+export type StageView = {
+  key: StageKey;
+  publishAt: string | null;
+  /** Hasil sudah diumumkan (publishAt sudah lewat). */
+  released: boolean;
+  /** Hasil (hanya bila released). */
+  result: StageResult | null;
+  info: Localized;
+  /** Pesan lolos/tidak lolos (hanya bila released dan sudah ada hasil). */
+  message: Localized | null;
+};
 
 /** Isian formulir (semua string agar mudah dipakai di <input>). */
 export type Profile = {
@@ -45,6 +80,8 @@ export type Applicant = Profile & {
   status: Status;
   createdAt: string;
   updatedAt: string;
+  /** Hanya untuk admin: hasil tiap tahap. */
+  stages?: Record<StageKey, StageResult>;
 };
 
 export type Localized = { id: string; en: string };
@@ -75,6 +112,8 @@ export type Me = {
   resultMessage: Localized | null;
   /** Berkas kelengkapan milik sendiri (null = belum diunggah). */
   document: DocumentInfo | null;
+  /** Tahap Seleksi Administrasi, Tes, Interview (urut). */
+  stages: StageView[];
 };
 
 export type AdminSettings = {
@@ -84,7 +123,13 @@ export type AdminSettings = {
   title: Localized;
   body: Localized;
   resultMessages: Partial<Record<Exclude<Status, 'pending'>, Localized>>;
+  stages: Record<StageKey, StageSettings>;
 };
+
+const blank = (): Localized => ({ id: '', en: '' });
+export const emptyStageSettings = (): StageSettings => ({ publishAt: null, info: blank(), pass: blank(), fail: blank() });
+export const emptyStages = (): Record<StageKey, StageSettings> =>
+  ({ admin: emptyStageSettings(), test: emptyStageSettings(), interview: emptyStageSettings() });
 
 /** Kesalahan yang bisa ditampilkan ke pengguna. `code` dipetakan ke teks di i18n. */
 export class AppError extends Error {

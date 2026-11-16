@@ -41,6 +41,19 @@ melihat hasil seleksi setelah waktu pengumuman tiba.
   disimpan sebagai draf.
 - **Satu akun Google untuk satu anak.** Satu anak juga hanya bisa didaftarkan
   sekali (dilihat dari nama dan tanggal lahir).
+- **Alur seleksi**: Pendaftaran → Seleksi Administrasi → Tes Akademik & Tes IQ →
+  Interview → Pengumuman. Di **Admin → Pengaturan**, setiap tahap punya:
+  - waktu umum hasil;
+  - info/jadwal, misalnya waktu dan tempat tes;
+  - pesan untuk yang lolos dan yang tidak lolos.
+
+  Panitia mengisi hasil per tahap di tabel pendaftar: pilih tahap, pilih
+  hasil, lalu **Terapkan**. Orang tua melihat alurnya di Beranda (✓ lolos, ✗
+  tidak lolos, tahap saat ini). Begitu hasil sebuah tahap diumumkan, muncul
+  **pemberitahuan** berisi pesan panitia dan info tahap berikutnya. Anak yang
+  tidak lolos di satu tahap melihat tahap-tahap berikutnya sebagai "Tidak
+  dilanjutkan". Hasil tahap tidak dikirim ke orang tua sebelum waktu umumnya.
+  Waktu umum harus urut, dan tahap terakhir tidak boleh sesudah pengumuman akhir.
 - **Status**: Diterima, Cadangan, Tidak diterima, atau Diproses. Panitia bisa
   menetapkannya kapan saja, tetapi peserta baru melihatnya setelah **waktu
   pengumuman**. Setelah waktu itu, data dikunci.

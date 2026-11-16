@@ -1,4 +1,4 @@
-import type { AdminSettings, Applicant, AuthUser, Lang, Me, Profile, PublicSettings, Status } from '../types';
+import type { AdminSettings, Applicant, AuthUser, Lang, Me, Profile, PublicSettings, StageKey, StageResult, Status } from '../types';
 
 /** Cara masuk yang tersedia. */
 export type AuthConfig = {
@@ -38,7 +38,8 @@ export interface Api {
   adminList(): Promise<Applicant[]>;
   adminGetSettings(): Promise<AdminSettings>;
   adminSaveSettings(s: AdminSettings): Promise<void>;
-  adminSetStatus(ids: string[], status: Status): Promise<number>;
+  /** Hasil akhir (tanpa stage) atau hasil satu tahap seleksi (stage + pending/lulus/tidak_lulus). */
+  adminSetStatus(ids: string[], status: Status | StageResult, stage?: StageKey): Promise<number>;
   /** Alamat berkas seorang pendaftar (hanya bisa dibuka admin). */
   adminDocumentUrl(a: Applicant): Promise<string>;
   /** Menghapus pendaftar beserta berkasnya. */

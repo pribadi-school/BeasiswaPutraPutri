@@ -8,7 +8,7 @@
  */
 import {
   AppError, type AdminSettings, type Applicant, type AuthUser, type Lang, type Me, type Profile,
-  type PublicSettings, type Status,
+  type PublicSettings, type StageKey, type StageResult, type StageView, type Status, emptyStages, STAGES,
 } from '../types';
 import { normalizePhone, validateProfile } from '../validate';
 import type { Api } from './api';
@@ -33,7 +33,7 @@ const fresh = (): DB => ({
   settings: {
     regOpen: true, ...SCHEDULE, announceAt: null,
     title: { id: 'Pengumuman Beasiswa Putra-Putri Daerah', en: 'Beasiswa Putra-Putri Daerah Announcement' },
-    body: { id: '', en: '' }, resultMessages: {},
+    body: { id: '', en: '' }, resultMessages: {}, stages: emptyStages(),
   },
   applicants: [], adminFailures: [],
 });
@@ -45,6 +45,9 @@ const load = (): DB => {
       const db = JSON.parse(raw) as DB;
       // Data demo lama yang masih punya tanggal pembukaan: buang (fitur itu dihapus).
       if ('regStart' in db.settings) delete (db.settings as { regStart?: unknown }).regStart;
+      // Data demo lama (sebelum ada tahapan seleksi).
+      db.settings.stages ??= emptyStages();
+      for (const a of db.applicants) a.stages ??= stageDefaults();
       return db;
     }
   } catch { /* abaikan */ }
@@ -63,6 +66,20 @@ const requireUser = (): AuthUser => {
   if (!u) throw new AppError('UNAUTHORIZED');
   return u;
 };
+
+const stageDefaults = (): Record<StageKey, StageResult> => ({ admin: 'pending', test: 'pending', interview: 'pending' });
+/** Sama dengan server: hasil tahap terlihat setelah waktu umumnya. */
+function stageViews(s: AdminSettings, a: Applicant | null): StageView[] {
+  return STAGES.map((key) => {
+    const cfg = s.stages[key];
+    const rel = !!cfg.publishAt && Date.parse(cfg.publishAt) <= Date.now();
+    const result = rel && a ? (a.stages ?? stageDefaults())[key] : null;
+    return {
+      key, publishAt: cfg.publishAt, released: rel, result, info: cfg.info,
+      message: result === 'lulus' ? cfg.pass : result === 'tidak_lulus' ? cfg.fail : null,
+    };
+  });
+}
 
 const released = (s: AdminSettings) => !!s.announceAt && Date.parse(s.announceAt) <= Date.now();
 const open = (s: AdminSettings) => s.regOpen
@@ -115,12 +132,13 @@ export function createDemoApi(): Api {
       const a = db.applicants.find((x) => x.email === u.email) ?? null;
       const rel = released(db.settings);
       return {
-        applicant: a && { ...a, status: rel ? a.status : 'pending', document: undefined },
+        applicant: a && { ...a, status: rel ? a.status : 'pending', document: undefined, stages: undefined },
         canEdit: open(db.settings), released: rel,
         announceAt: db.settings.announceAt, regDeadline: db.settings.regDeadline, now: new Date().toISOString(),
         title: rel ? db.settings.title : null, body: rel ? db.settings.body : null,
         resultMessage: rel && a && a.status !== 'pending' ? db.settings.resultMessages[a.status] ?? null : null,
         document: a?.document ?? null,
+        stages: stageViews(db.settings, a),
       };
     },
     async register(p: Profile, lang: Lang) {
@@ -131,7 +149,7 @@ export function createDemoApi(): Api {
       const c = clean(p);
       if (db.applicants.some((a) => dupKey(a) === dupKey(c))) throw new AppError('DUPLICATE');
       const now = new Date().toISOString();
-      db.applicants.push({ ...c, id: crypto.randomUUID(), email: u.email, lang, status: 'pending', createdAt: now, updatedAt: now });
+      db.applicants.push({ ...c, id: crypto.randomUUID(), email: u.email, lang, status: 'pending', createdAt: now, updatedAt: now, stages: stageDefaults() });
       save(db);
     },
     async updateProfile(p) {
@@ -190,15 +208,24 @@ export function createDemoApi(): Api {
     async adminSaveSettings(s) {
       requireAdmin();
       if (s.announceAt && s.regDeadline && Date.parse(s.announceAt) < Date.parse(s.regDeadline)) throw new AppError('INVALID', 'announce_at');
+      const times = STAGES.map((k) => s.stages[k].publishAt).filter((x): x is string => !!x).map(Date.parse);
+      if (times.some((t, i) => i > 0 && t < times[i - 1]) || (s.announceAt && times.some((t) => t > Date.parse(s.announceAt!)))) {
+        throw new AppError('INVALID', 'stage_order');
+      }
       const db = load();
       db.settings = s;
       save(db);
     },
-    async adminSetStatus(ids, status: Status) {
+    async adminSetStatus(ids, status, stage) {
       requireAdmin();
       const db = load();
       let n = 0;
-      for (const a of db.applicants) if (ids.includes(a.id)) { a.status = status; n++; }
+      for (const a of db.applicants) {
+        if (!ids.includes(a.id)) continue;
+        if (stage) (a.stages ??= stageDefaults())[stage] = status as StageResult;
+        else a.status = status as Status;
+        n++;
+      }
       save(db);
       return n;
     },

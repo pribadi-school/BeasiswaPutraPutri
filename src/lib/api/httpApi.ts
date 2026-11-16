@@ -57,7 +57,7 @@ export function createHttpApi(): Api {
     adminList: () => call<Applicant[]>('GET', '/admin/applicants'),
     adminGetSettings: () => call<AdminSettings>('GET', '/admin/settings'),
     async adminSaveSettings(s) { await call('PUT', '/admin/settings', s); },
-    adminSetStatus: async (ids, status) => (await call<{ updated: number }>('POST', '/admin/status', { ids, status })).updated,
+    adminSetStatus: async (ids, status, stage) => (await call<{ updated: number }>('POST', '/admin/status', { ids, status, stage })).updated,
     adminDocumentUrl: async (a) => `/api/admin/applicants/${encodeURIComponent(a.id)}/document`,
     async adminDelete(a) { await call('DELETE', `/admin/applicants/${encodeURIComponent(a.id)}`); },
   };

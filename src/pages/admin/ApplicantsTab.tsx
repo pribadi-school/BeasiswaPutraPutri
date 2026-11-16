@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Download, FileText, FileWarning, Trash2, Users } from 'lucide-react';
+import { Check, Download, FileText, FileWarning, Minus, Trash2, Users, X } from 'lucide-react';
 import { api } from '../../lib/api';
 import { applicantsCsv, downloadCsv } from '../../lib/csv';
 import { useI18n, type TKey } from '../../lib/i18n';
 import { formatDateOnly, formatWib } from '../../lib/time';
-import { AppError, STATUSES, type Applicant, type Level, type Status } from '../../lib/types';
+import { AppError, STAGE_RESULTS, STAGES, STATUSES, type Applicant, type Level, type StageKey, type StageResult, type Status } from '../../lib/types';
 import { btnPrimary, btnSecondary, Card, ErrorBox, inputCls, StatCard, STATUS_STYLE, StatusBadge, useErrorText } from '../../components/ui';
 import { WelcomeBanner } from '../../components/WelcomeBanner';
 import { useAdmin } from './AdminPage';
@@ -23,7 +23,9 @@ export function ApplicantsTab() {
   const [status, setStatus] = useState<Status | ''>('');
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState<string | null>(null);
-  const [bulk, setBulk] = useState<Status | ''>('');
+  const [bulkStage, setBulkStage] = useState<StageKey | 'final'>('admin');
+  const [bulk, setBulk] = useState<string>('');
+  const [stageFilter, setStageFilter] = useState(''); // "admin:lulus" dst.
   const [notice, setNotice] = useState<string | null>(null);
 
   const fail = useCallback((e: unknown) => {
@@ -39,8 +41,9 @@ export function ApplicantsTab() {
     const needle = q.trim().toLowerCase();
     return (list ?? []).filter((a) =>
       (!level || a.level === level) && (!status || a.status === status) &&
+      (!stageFilter || a.stages?.[stageFilter.split(':')[0] as StageKey] === stageFilter.split(':')[1]) &&
       (!needle || [a.fullName, a.email, a.originSchool, a.province, a.regency, a.parentName].join(' ').toLowerCase().includes(needle)));
-  }, [list, q, level, status]);
+  }, [list, q, level, status, stageFilter]);
 
   const banner = <WelcomeBanner eyebrow={formatWib(new Date().toISOString(), lang, false)} title={t('adm.welcome')} subtitle={t('adm.sub')} />;
   if (error && !list) return <div className="space-y-5">{banner}<ErrorBox>{error}</ErrorBox></div>;
@@ -52,7 +55,9 @@ export function ApplicantsTab() {
   async function applyBulk() {
     if (!bulk || !sel.size) return;
     try {
-      const n = await api.adminSetStatus([...sel], bulk);
+      const n = bulkStage === 'final'
+        ? await api.adminSetStatus([...sel], bulk as Status)
+        : await api.adminSetStatus([...sel], bulk as StageResult, bulkStage);
       setNotice(t('adm.applied', { n })); setSel(new Set()); setBulk(''); await load();
     } catch (e) { fail(e); }
   }
@@ -69,8 +74,16 @@ export function ApplicantsTab() {
         ))}
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-4">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('adm.search')} aria-label={t('adm.search')} className={`${inputCls} sm:col-span-2`} />
+        <select value={stageFilter} onChange={(e) => setStageFilter(e.target.value)} aria-label={t('adm.stageFilter')} className={inputCls}>
+          <option value="">{t('adm.stageFilter')}: {t('adm.all')}</option>
+          {STAGES.map((k) => (
+            <optgroup key={k} label={t(`stage.${k}` as TKey)}>
+              {STAGE_RESULTS.map((r) => <option key={r} value={`${k}:${r}`}>{t(`stage.${k}` as TKey)}: {t(`stageres.${r}` as TKey)}</option>)}
+            </optgroup>
+          ))}
+        </select>
         <select value={level} onChange={(e) => setLevel(e.target.value as Level | '')} aria-label={t('adm.level')} className={inputCls}>
           <option value="">{t('adm.level')}: {t('adm.all')}</option>
           {(['smp', 'sma'] as const).map((l) => <option key={l} value={l}>{t(`level.${l}` as TKey)}</option>)}
@@ -82,9 +95,16 @@ export function ApplicantsTab() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <select value={bulk} onChange={(e) => setBulk(e.target.value as Status | '')} aria-label={t('adm.setStatus')} className={`${inputCls} !w-auto`}>
-          <option value="">{t('adm.setStatus')}</option>
-          {STATUSES.map((s) => <option key={s} value={s}>{t(`status.short.${s}` as TKey)}</option>)}
+        <select value={bulkStage} onChange={(e) => { setBulkStage(e.target.value as StageKey | 'final'); setBulk(''); }}
+          aria-label={t('adm.stage')} className={`${inputCls} !w-auto`}>
+          {STAGES.map((k) => <option key={k} value={k}>{t(`stage.${k}` as TKey)}</option>)}
+          <option value="final">{t('adm.stageFinal')}</option>
+        </select>
+        <select value={bulk} onChange={(e) => setBulk(e.target.value)} aria-label={t('adm.setStatus')} className={`${inputCls} !w-auto`}>
+          <option value="">{t('adm.chooseResult')}</option>
+          {bulkStage === 'final'
+            ? STATUSES.map((s) => <option key={s} value={s}>{t(`status.short.${s}` as TKey)}</option>)
+            : STAGE_RESULTS.map((r) => <option key={r} value={r}>{t(`stageres.${r}` as TKey)}</option>)}
         </select>
         <button disabled={!bulk || !sel.size} onClick={() => void applyBulk()} className={btnPrimary}>{t('adm.apply')} ({t('adm.selected', { n: sel.size })})</button>
         <button onClick={() => downloadCsv(`pendaftar-beasiswa-${new Date().toISOString().slice(0, 10)}.csv`, applicantsCsv(shown))} className={`${btnSecondary} ml-auto`}>
@@ -102,7 +122,7 @@ export function ApplicantsTab() {
             <thead className="bg-action-tint text-foreground">
               <tr>
                 <th className="w-10 p-2"><input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all" className="size-5 accent-action" /></th>
-                {(['name', 'level', 'origin', 'school', 'created', 'doc', 'status'] as const).map((c) => <th key={c} className="p-2 font-semibold">{t(`adm.col.${c}` as TKey)}</th>)}
+                {(['name', 'level', 'origin', 'school', 'created', 'doc', 'flow', 'status'] as const).map((c) => <th key={c} className="p-2 font-semibold">{t(`adm.col.${c}` as TKey)}</th>)}
               </tr>
             </thead>
             <tbody>
@@ -122,6 +142,31 @@ export function ApplicantsTab() {
         </div>
       )}
     </div>
+  );
+}
+
+/** Hasil tiap tahap: ikon + singkatan (tidak warna saja). */
+function StageChips({ a }: { a: Applicant }) {
+  const { t } = useI18n();
+  const look = {
+    lulus: { Icon: Check, cls: 'bg-success-tint text-foreground' },
+    tidak_lulus: { Icon: X, cls: 'bg-destructive-tint text-destructive' },
+    pending: { Icon: Minus, cls: 'bg-surface-muted text-muted-foreground' },
+  } as const;
+  return (
+    <span className="inline-flex gap-1 whitespace-nowrap">
+      {STAGES.map((k) => {
+        const r = a.stages?.[k] ?? 'pending';
+        const { Icon, cls } = look[r];
+        return (
+          <span key={k} title={`${t(`stage.${k}` as TKey)}: ${t(`stageres.${r}` as TKey)}`}
+            className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-semibold ${cls}`}>
+            <Icon size={12} strokeWidth={3} aria-hidden />{t(`stage.short.${k}` as TKey)}
+            <span className="sr-only">: {t(`stageres.${r}` as TKey)}</span>
+          </span>
+        );
+      })}
+    </span>
   );
 }
 
@@ -156,11 +201,12 @@ function ApplicantRow(p: {
             ? <span className="inline-flex items-center gap-1 font-semibold text-foreground"><FileText size={16} className="text-action" aria-hidden /> {t('adm.docYes')}</span>
             : <span className="inline-flex items-center gap-1 text-muted-foreground"><FileWarning size={16} className="text-accent-text" aria-hidden /> {t('adm.docNo')}</span>}
         </td>
+        <td className="p-2"><StageChips a={a} /></td>
         <td className="p-2"><StatusBadge status={a.status} /></td>
       </tr>
       {p.expanded && (
         <tr className="bg-surface-portal">
-          <td colSpan={8} className="p-3">
+          <td colSpan={9} className="p-3">
             <dl className="grid gap-x-6 gap-y-1 sm:grid-cols-2">
               {det.map(([k, v]) => <div key={k}><dt className="text-xs text-muted-foreground">{t(k)}</dt><dd className="whitespace-pre-line break-words">{v}</dd></div>)}
             </dl>

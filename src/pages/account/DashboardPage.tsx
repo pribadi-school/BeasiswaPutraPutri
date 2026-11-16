@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { AlertTriangle, CalendarClock, ChevronRight, ClipboardCheck, FileText, FileWarning, HelpCircle, Lock, ShieldCheck, Users, School } from 'lucide-react';
+import { AlertTriangle, CalendarClock, CheckCircle2, ChevronRight, FileText, FileWarning, HelpCircle, Lock, Megaphone, ShieldCheck, Users, School, XCircle } from 'lucide-react';
 import { api } from '../../lib/api';
 import { useI18n, type TKey } from '../../lib/i18n';
-import { completeness } from '../../lib/profileView';
 import { formatWib } from '../../lib/time';
 import { AppError, emptyProfile } from '../../lib/types';
 import { ProfileForm } from '../../components/ProfileForm';
 import { clearDraft, draftKeyFor } from '../../lib/draft';
 import { WelcomeBanner } from '../../components/WelcomeBanner';
-import { btnPill, ErrorBox, SectionHeader, StatCard, STATUS_STYLE, useErrorText } from '../../components/ui';
+import { btnPill, ErrorBox, SectionHeader, useErrorText } from '../../components/ui';
+import { buildFlow, SelectionFlow } from '../../components/SelectionFlow';
 import { useAccount } from './AccountLayout';
 
 function today(lang: 'id' | 'en') {
@@ -19,7 +19,7 @@ function today(lang: 'id' | 'en') {
 export function DashboardPage() {
   const { t, lang } = useI18n();
   const errText = useErrorText();
-  const { user, me, left, reload, expire, notice, setNotice } = useAccount();
+  const { user, me, reload, expire, notice, setNotice } = useAccount();
   const [formError, setFormError] = useState<string | null>(null);
   const [formField, setFormField] = useState<string | null>(null);
   const a = me.applicant;
@@ -64,11 +64,12 @@ export function DashboardPage() {
     );
   }
 
-  const st = STATUS_STYLE[a.status];
-  const days = left === null ? null : Math.floor(left / 86_400_000);
-  const announceValue = me.released ? t('dash.opened') : !me.announceAt ? t('dash.tbd')
-    : days !== null && days >= 1 ? t('dash.daysLeft', { n: days }) : t('dash.hoursLeft');
-  const pct = completeness(a, !!me.document);
+  const flow = buildFlow(me, t, lang);
+  // Pemberitahuan: hasil tahap terakhir yang sudah diumumkan (atau pengumuman akhir).
+  const finalOut = me.released && a.status !== 'pending';
+  const lastIdx = me.stages.map((s) => s.released && (s.result === 'lulus' || s.result === 'tidak_lulus')).lastIndexOf(true);
+  const last = lastIdx >= 0 ? me.stages[lastIdx] : null;
+  const next = last?.result === 'lulus' ? me.stages[lastIdx + 1] ?? null : null;
 
   const notices: { Icon: typeof Lock; title: string; body: string }[] = [
     me.canEdit
@@ -104,13 +105,34 @@ export function DashboardPage() {
 
       <div className="grid gap-6 xl:grid-cols-[1fr_320px]">
         <div className="min-w-0 space-y-6">
+          {(finalOut || last) && (
+            <section role="status" className={`flex gap-3 rounded-lg p-4 shadow-e2 ring-2 ${!finalOut && last?.result === 'tidak_lulus' ? 'bg-surface ring-border-strong' : 'bg-success-tint ring-success'}`}>
+              {finalOut ? <Megaphone size={24} className="mt-0.5 shrink-0 text-action" aria-hidden />
+                : last?.result === 'lulus' ? <CheckCircle2 size={24} className="mt-0.5 shrink-0 text-success" aria-hidden />
+                : <XCircle size={24} className="mt-0.5 shrink-0 text-destructive" aria-hidden />}
+              <div className="min-w-0 flex-1 space-y-1">
+                <h2 className="font-bold text-foreground">
+                  {finalOut ? t('notif.final')
+                    : t(last!.result === 'lulus' ? 'notif.pass' : 'notif.fail', { stage: t(`stage.${last!.key}` as TKey) })}
+                </h2>
+                {!finalOut && last?.message?.[lang] && <p className="whitespace-pre-line text-sm text-foreground">{last.message[lang]}</p>}
+                {!finalOut && next && (
+                  <p className="text-sm text-foreground">
+                    <span className="font-semibold">{t('notif.next', { stage: t(`stage.${next.key}` as TKey) })}</span>
+                    {next.info[lang] ? <> — <span className="whitespace-pre-line">{next.info[lang]}</span></> : null}
+                  </p>
+                )}
+                <Link to="/akun/pengumuman" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-action hover:underline">
+                  {t('notif.seeAll')} <ChevronRight size={16} aria-hidden />
+                </Link>
+              </div>
+            </section>
+          )}
+
           <section>
-            <SectionHeader title={t('dash.overview')} />
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <StatCard Icon={st.Icon} value={t(`status.short.${a.status}` as TKey)} label={t('dash.status')} highlight />
-              <StatCard Icon={CalendarClock} value={announceValue} label={t('dash.announce')} />
-              <StatCard Icon={ClipboardCheck} value={`${pct}%`} label={t('dash.complete')} sub={t('dash.completeSub')} />
-            </div>
+            <SectionHeader title={t('flow.title')}
+              action={<Link to="/akun/pengumuman" className="inline-flex min-h-11 items-center font-semibold text-action hover:underline">{t('dash.seeAll')}</Link>} />
+            <SelectionFlow steps={flow} />
           </section>
 
           <section>
