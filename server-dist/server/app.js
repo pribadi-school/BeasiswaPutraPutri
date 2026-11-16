@@ -24,6 +24,7 @@ import { join } from 'node:path';
 import bcrypt from 'bcryptjs';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { cleanProfile, coerceProfile, validateProfile } from '../src/lib/validate.js';
+import { STAGE_RESULTS, STAGES } from '../src/lib/types.js';
 const MAX_PDF = 10 * 1024 * 1024;
 const STATUSES = ['pending', 'lulus', 'cadangan', 'tidak_lulus'];
 const COOKIE = { user: 'bpd_user', admin: 'bpd_admin' };
@@ -40,6 +41,8 @@ class HttpError extends Error {
         this.field = field;
     }
 }
+/** Kolom hasil per tahap (nama kolom tetap — tidak pernah dari input). */
+const STAGE_COLUMN = { admin: 'res_admin', test: 'res_test', interview: 'res_interview' };
 const sha256 = (s) => createHash('sha256').update(s).digest('hex');
 const iso = (d) => (d ? d.toISOString() : null);
 const parseJson = (s, fallback) => {
@@ -159,9 +162,37 @@ export function createApp({ pool, cfg, verifyGoogle }) {
             title: parseJson(r.announce_title, { id: '', en: '' }),
             body: parseJson(r.announce_body, { id: '', en: '' }),
             resultMessages: parseJson(r.result_messages, {}),
+            stages: parseStages(r.stages),
         };
     }
+    function parseStages(raw) {
+        const src = parseJson(raw, {});
+        const loc = (v) => {
+            const o = (v && typeof v === 'object' ? v : {});
+            return { id: typeof o.id === 'string' ? o.id : '', en: typeof o.en === 'string' ? o.en : '' };
+        };
+        const out = {};
+        for (const k of STAGES) {
+            const s = src[k] ?? {};
+            const d = typeof s.publishAt === 'string' ? new Date(s.publishAt) : null;
+            out[k] = { publishAt: d && !Number.isNaN(d.getTime()) ? d : null, info: loc(s.info), pass: loc(s.pass), fail: loc(s.fail) };
+        }
+        return out;
+    }
+    const stagesJson = (st) => Object.fromEntries(STAGES.map((k) => [k, { ...st[k], publishAt: iso(st[k].publishAt) }]));
     const released = (s, now = new Date()) => !!s.announceAt && s.announceAt <= now;
+    /** Hasil tahap terlihat peserta hanya setelah waktu umumnya. */
+    function stageViews(s, a, now = new Date()) {
+        return STAGES.map((key) => {
+            const cfg = s.stages[key];
+            const rel = !!cfg.publishAt && cfg.publishAt <= now;
+            const result = rel && a ? a[STAGE_COLUMN[key]] : null;
+            return {
+                key, publishAt: iso(cfg.publishAt), released: rel, result, info: cfg.info,
+                message: result === 'lulus' ? cfg.pass : result === 'tidak_lulus' ? cfg.fail : null,
+            };
+        });
+    }
     const registrationOpen = (s, now = new Date()) => s.regOpen && (!s.regDeadline || now < s.regDeadline) && !released(s, now);
     // ---- Data pendaftar ---------------------------------------------------------
     function applicantJson(r, showStatus, admin = false) {
@@ -175,7 +206,7 @@ export function createApp({ pool, cfg, verifyGoogle }) {
             parentName: r.parent_name, parentRelation: r.parent_relation, parentPhone: r.parent_phone,
             parentEmail: r.parent_email, parentJob: r.parent_job, incomeBand: r.income_band ?? '',
             siblings: r.siblings == null ? '' : String(r.siblings), achievements: r.achievements, motivation: r.motivation,
-            ...(admin ? { userId: r.user_id } : {}),
+            ...(admin ? { userId: r.user_id, stages: { admin: r.res_admin, test: r.res_test, interview: r.res_interview } } : {}),
             document: r.doc_size == null ? null : { size: r.doc_size, uploadedAt: iso(r.doc_uploaded_at) },
         };
     }
@@ -305,6 +336,7 @@ export function createApp({ pool, cfg, verifyGoogle }) {
             title: rel ? s.title : null, body: rel ? s.body : null,
             resultMessage: rel && a ? s.resultMessages[a.status] ?? null : null,
             document: a && a.doc_size != null ? { size: a.doc_size, uploadedAt: iso(a.doc_uploaded_at) } : null,
+            stages: stageViews(s, a),
         });
     }));
     app.post('/api/me/register', json, h(async (req, res) => {
@@ -411,7 +443,8 @@ export function createApp({ pool, cfg, verifyGoogle }) {
         const s = await loadSettings();
         res.json({
             regOpen: s.regOpen, regDeadline: iso(s.regDeadline), announceAt: iso(s.announceAt),
-            title: s.title, body: s.body, resultMessages: s.resultMessages, now: new Date().toISOString(),
+            title: s.title, body: s.body, resultMessages: s.resultMessages, stages: stagesJson(s.stages),
+            now: new Date().toISOString(),
         });
     }));
     app.put('/api/admin/settings', json, h(async (req, res) => {
@@ -442,23 +475,44 @@ export function createApp({ pool, cfg, verifyGoogle }) {
             if (b.resultMessages?.[st])
                 messages[st] = loc(b.resultMessages[st], 5000);
         }
-        await pool.execute(`UPDATE settings SET reg_open = ?, reg_deadline = ?, announce_at = ?, announce_title = ?, announce_body = ?, result_messages = ?
-       WHERE id = 1`, [b.regOpen ? 1 : 0, regDeadline, announceAt, JSON.stringify(loc(b.title, 300)),
-            JSON.stringify(loc(b.body, 10000)), JSON.stringify(messages)]);
+        // Tahap: waktu umum harus urut (Administrasi ≤ Tes ≤ Interview ≤ Pengumuman).
+        const stages = {};
+        const order = [];
+        for (const k of STAGES) {
+            const s = (b.stages?.[k] ?? {});
+            const publishAt = date(s.publishAt, `stage_${k}`);
+            if (publishAt) {
+                if (order.some((d) => d > publishAt))
+                    throw new HttpError(400, 'INVALID', 'stage_order');
+                order.push(publishAt);
+            }
+            stages[k] = { publishAt: iso(publishAt), info: loc(s.info, 2000), pass: loc(s.pass, 5000), fail: loc(s.fail, 5000) };
+        }
+        if (announceAt && order.some((d) => d > announceAt))
+            throw new HttpError(400, 'INVALID', 'stage_order');
+        await pool.execute(`UPDATE settings SET reg_open = ?, reg_deadline = ?, announce_at = ?, announce_title = ?, announce_body = ?,
+       result_messages = ?, stages = ? WHERE id = 1`, [b.regOpen ? 1 : 0, regDeadline, announceAt, JSON.stringify(loc(b.title, 300)),
+            JSON.stringify(loc(b.body, 10000)), JSON.stringify(messages), JSON.stringify(stages)]);
         res.json({ ok: true });
     }));
+    /** Menetapkan hasil: tahap tertentu (stage = admin|test|interview) atau hasil akhir (tanpa stage). */
     app.post('/api/admin/status', json, h(async (req, res) => {
         await requireAdmin(req);
         const ids = req.body?.ids;
         const status = req.body?.status;
-        if (!STATUSES.includes(status))
+        const stage = req.body?.stage;
+        if (stage !== undefined && !STAGES.includes(stage))
+            throw new HttpError(400, 'INVALID', 'stage');
+        const allowed = stage ? STAGE_RESULTS : STATUSES;
+        if (!allowed.includes(status))
             throw new HttpError(400, 'INVALID', 'status');
         if (!Array.isArray(ids) || ids.length > 2000 || !ids.every((x) => typeof x === 'string' && /^[0-9a-f-]{36}$/.test(x))) {
             throw new HttpError(400, 'INVALID', 'ids');
         }
         if (ids.length === 0)
             return res.json({ updated: 0 });
-        const [r] = await pool.query('UPDATE applicants SET status = ? WHERE id IN (?)', [status, ids]);
+        const column = stage ? STAGE_COLUMN[stage] : 'status';
+        const [r] = await pool.query(`UPDATE applicants SET ${column} = ? WHERE id IN (?)`, [status, ids]);
         res.json({ updated: r.affectedRows });
     }));
     app.get('/api/admin/applicants/:id/document', h(async (req, res) => {

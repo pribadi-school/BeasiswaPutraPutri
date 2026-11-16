@@ -1,5 +1,10 @@
 /** Tipe data bersama. */
 export const STATUSES = ['pending', 'lulus', 'cadangan', 'tidak_lulus'];
+export const STAGES = ['admin', 'test', 'interview'];
+export const STAGE_RESULTS = ['pending', 'lulus', 'tidak_lulus'];
+const blank = () => ({ id: '', en: '' });
+export const emptyStageSettings = () => ({ publishAt: null, info: blank(), pass: blank(), fail: blank() });
+export const emptyStages = () => ({ admin: emptyStageSettings(), test: emptyStageSettings(), interview: emptyStageSettings() });
 /** Kesalahan yang bisa ditampilkan ke pengguna. `code` dipetakan ke teks di i18n. */
 export class AppError extends Error {
     code;
