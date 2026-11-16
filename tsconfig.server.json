@@ -1,7 +1,9 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022"
+    ],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "strict": true,
@@ -12,7 +14,14 @@
     "rewriteRelativeImportExtensions": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["server/**/*.ts", "src/lib/validate.ts", "src/lib/types.ts"]
+  "include": [
+    "server/**/*.ts",
+    "src/lib/validate.ts",
+    "src/lib/types.ts",
+    "src/lib/schedule.ts"
+  ]
 }

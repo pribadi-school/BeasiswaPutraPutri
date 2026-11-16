@@ -11,6 +11,7 @@ import {
   type PublicSettings, type StageKey, type StageResult, type StageView, type Status, emptyStages, STAGES,
 } from '../types';
 import { normalizePhone, validateProfile } from '../validate';
+import { DEFAULT_ANNOUNCE_AT, DEFAULT_REG_DEADLINE, defaultStages } from '../schedule';
 import type { Api } from './api';
 
 type DB = {
@@ -27,13 +28,13 @@ const files = new Map<string, string>();
 const ADMIN_PASSWORD = 'demo';
 
 /** Penutupan awal (sama dengan migrasi): 26 Des 2026 23.59 WIB. Tanpa tanggal pembukaan. */
-const SCHEDULE = { regDeadline: '2026-12-26T16:59:00.000Z' };
+const SCHEDULE = { regDeadline: DEFAULT_REG_DEADLINE };
 
 const fresh = (): DB => ({
   settings: {
-    regOpen: true, ...SCHEDULE, announceAt: null,
+    regOpen: true, ...SCHEDULE, announceAt: DEFAULT_ANNOUNCE_AT,
     title: { id: 'Pengumuman Beasiswa Putra-Putri Daerah', en: 'Beasiswa Putra-Putri Daerah Announcement' },
-    body: { id: '', en: '' }, resultMessages: {}, stages: emptyStages(),
+    body: { id: '', en: '' }, resultMessages: {}, stages: defaultStages(),
   },
   applicants: [], adminFailures: [],
 });
@@ -235,6 +236,9 @@ export function createDemoApi(): Api {
       if (!url) throw new AppError('DEMO_FILE_GONE');
       return url;
     },
+    // Mode demo tidak mengirim email.
+    async adminNotifyStatus() { requireAdmin(); return { configured: false, pending: 0 }; },
+    async adminNotifyRun() { requireAdmin(); throw new AppError('MAIL_NOT_CONFIGURED'); },
     async adminDelete(a) {
       requireAdmin();
       const db = load();

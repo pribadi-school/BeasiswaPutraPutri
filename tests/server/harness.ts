@@ -14,10 +14,15 @@ import mysql from 'mysql2/promise';
 import { createApp, type GoogleIdentity } from '../../server/app.ts';
 import type { Config } from '../../server/config.ts';
 import { createPool, migrate, type Pool } from '../../server/db.ts';
+import type { Mail } from '../../server/notify.ts';
 
 const schema = fileURLToPath(new URL('../../server/schema.sql', import.meta.url));
 
-export type Harness = { base: string; pool: Pool; uploadDir: string; cfg: Config; stop: () => Promise<void> };
+export type Harness = {
+  base: string; pool: Pool; uploadDir: string; cfg: Config; stop: () => Promise<void>;
+  /** Email yang "terkirim" lewat pengirim palsu. `failNext` = gagalkan email berikutnya. */
+  mails: Mail[]; mailer: { failNext: boolean };
+};
 
 /** Token Google palsu untuk tes: "fake:<sub>:<email>". */
 export async function fakeGoogle(credential: string): Promise<GoogleIdentity> {
@@ -50,18 +55,27 @@ export async function startServer(): Promise<Harness> {
   const uploadDir = join(dir, 'berkas');
   const cfg: Config = {
     port: 0, production: false, googleClientId: 'tes', devLogin: false, uploadDir, staticDir: null,
+    smtp: null, appUrl: 'https://beasiswa.test', notifyMaxPerRun: 100,
     db: { host: '127.0.0.1', port, user: 'app', password: 'app-pass', database: 'beasiswa' },
   };
   const pool = createPool(cfg.db);
   await migrate(pool, schema);
   await migrate(pool, schema); // dijalankan dua kali: harus aman
 
-  const app = createApp({ pool, cfg, verifyGoogle: fakeGoogle });
+  const mails: Mail[] = [];
+  const mailer = { failNext: false };
+  const app = createApp({
+    pool, cfg, verifyGoogle: fakeGoogle,
+    mailer: async (m) => {
+      if (mailer.failNext) { mailer.failNext = false; throw new Error('SMTP palsu gagal'); }
+      mails.push(m);
+    },
+  });
   const server: Server = await new Promise((resolve) => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
   return {
-    base, pool, uploadDir, cfg,
+    base, pool, uploadDir, cfg, mails, mailer,
     stop: async () => {
       await new Promise((r) => server.close(r));
       await pool.end();

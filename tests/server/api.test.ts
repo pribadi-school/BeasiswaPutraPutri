@@ -52,7 +52,75 @@ describe('skema', () => {
     const r = await new Client(h.base).get('/api/settings');
     expect(r.data.regDeadline).toBe('2026-12-26T16:59:00.000Z');
     expect(r.data.regOpen).toBe(true);
+    // Jadwal tahapan awal: pengumuman 20 Jan 2027 09.00 WIB, info tes 9 Jan & interview 16 Jan.
+    expect(r.data.announceAt).toBe('2027-01-20T02:00:00.000Z');
+    const s = (await (await admin()).get('/api/admin/settings')).data;
+    expect(s.stages.test.info.id).toMatch(/9 Januari 2027/);
+    expect(s.stages.interview.info.id).toMatch(/16 Januari 2027/);
+    expect(s.stages.admin.pass.id).toMatch(/lolos seleksi administrasi/);
     await settings(); // tes berikut tanpa batas penutupan
+  });
+});
+
+describe('email pemberitahuan', () => {
+  const notify = async () => (await (await admin()).post('/api/admin/notify')).data;
+  const stagesWith = (adminAt: string | null) => ({
+    admin: { publishAt: adminAt, info: { id: '', en: '' }, pass: { id: 'Pesan lolos adm', en: 'Adm pass msg' }, fail: { id: 'Pesan gagal adm', en: '' } },
+    test: { publishAt: null, info: { id: 'Sabtu, 9 Januari 2027 di sekolah', en: 'Sat 9 Jan' }, pass: { id: '', en: '' }, fail: { id: '', en: '' } },
+    interview: { publishAt: null, info: { id: '', en: '' }, pass: { id: '', en: '' }, fail: { id: '', en: '' } },
+  });
+
+  it('pendaftaran diterima: email ke akun Google + email orang tua, sekali saja', async () => {
+    await notify(); // kosongkan antrean dari tes sebelumnya
+    h.mails.length = 0;
+    const p = await parent('ortu.email@gmail.com');
+    await p.post('/api/me/register', { profile: profile({ fullName: 'Anak Email', parentEmail: 'Ayah.Email@contoh.id' }) });
+    expect((await (await admin()).get('/api/admin/notify')).data).toEqual({ configured: true, pending: 1 });
+    expect(await notify()).toEqual({ sent: 1, failed: 0, remaining: 0 });
+    expect(h.mails).toHaveLength(1);
+    expect(h.mails[0].to).toEqual(['ortu.email@gmail.com', 'Ayah.Email@contoh.id']);
+    expect(h.mails[0].subject).toMatch(/Pendaftaran diterima/);
+    expect(h.mails[0].text).toMatch(/Yth\. Orang Tua Tes/);
+    expect(h.mails[0].text).toMatch(/belum diunggah/); // belum ada PDF
+    expect(h.mails[0].text).toMatch(/https:\/\/beasiswa\.test\/akun\/pengumuman/);
+    expect(await notify()).toEqual({ sent: 0, failed: 0, remaining: 0 }); // tidak dobel
+  });
+
+  it('hasil tahap: dikirim hanya setelah waktu umum, dengan pesan + info tahap berikutnya; isi HTML aman', async () => {
+    h.mails.length = 0;
+    const p = await parent();
+    await p.post('/api/me/register', { profile: profile({ fullName: 'Anak <b>Tahap</b>' }) });
+    await notify(); h.mails.length = 0;
+    const a = await admin();
+    const row = (await a.get('/api/admin/applicants')).data.find((x: { fullName: string }) => x.fullName === 'Anak <b>Tahap</b>');
+    await a.post('/api/admin/status', { ids: [row.id], stage: 'admin', status: 'lulus' });
+    await settings({ stages: stagesWith(new Date(Date.now() + 86_400_000).toISOString()) });
+    expect((await notify()).sent).toBe(0); // belum waktunya
+
+    await settings({ stages: stagesWith(new Date(Date.now() - 1000).toISOString()) });
+    expect((await notify()).sent).toBe(1);
+    const m = h.mails[0];
+    expect(m.subject).toMatch(/Hasil Seleksi Administrasi: LOLOS/);
+    expect(m.text).toMatch(/Pesan lolos adm/);
+    expect(m.text).toMatch(/Tahap berikutnya: Tes Akademik & Tes IQ — Sabtu, 9 Januari 2027 di sekolah/);
+    expect(m.html).toContain('Anak &lt;b&gt;Tahap&lt;/b&gt;');
+    expect(m.html).not.toContain('<b>Tahap</b>');
+    await settings();
+  });
+
+  it('gagal kirim: dicoba lagi di putaran berikutnya', async () => {
+    h.mails.length = 0;
+    const p = await parent();
+    await p.post('/api/me/register', { profile: profile({ fullName: 'Anak Gagal Kirim' }) });
+    h.mailer.failNext = true;
+    expect(await notify()).toMatchObject({ sent: 0, failed: 1 });
+    expect(await notify()).toMatchObject({ sent: 1, failed: 0 });
+    expect(h.mails.map((x) => x.subject)).toHaveLength(1);
+  });
+
+  it('peserta biasa tidak bisa memicu pengiriman email', async () => {
+    const p = await parent();
+    expect((await p.post('/api/admin/notify')).status).toBe(401);
   });
 });
 

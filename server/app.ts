@@ -28,6 +28,11 @@ import type { Config } from './config.ts';
 import type { Pool } from './db.ts';
 import { cleanProfile, coerceProfile, validateProfile } from '../src/lib/validate.ts';
 import { STAGE_RESULTS, STAGES, type Profile, type StageKey, type StageResult } from '../src/lib/types.ts';
+import {
+  iso, loadSettings as loadSettingsFrom, registrationOpen, released, STAGE_COLUMN,
+  type Localized, type Settings, type StageCfg,
+} from './settings.ts';
+import { notificationStatus, runNotifications, smtpMailer, type Mailer } from './notify.ts';
 
 export type GoogleIdentity = { sub: string; email: string; name: string | null };
 export type Deps = {
@@ -35,6 +40,8 @@ export type Deps = {
   cfg: Config;
   /** Diganti di tes. Default: verifikasi token Google sungguhan. */
   verifyGoogle?: (credential: string) => Promise<GoogleIdentity>;
+  /** Pengirim email (diganti di tes). Default: SMTP dari cfg.smtp. */
+  mailer?: Mailer;
 };
 
 const MAX_PDF = 10 * 1024 * 1024;
@@ -50,26 +57,8 @@ class HttpError extends Error {
 }
 
 type Kind = 'user' | 'admin';
-type Localized = { id: string; en: string };
-type Settings = {
-  regOpen: boolean;
-  regDeadline: Date | null;
-  announceAt: Date | null;
-  title: Localized;
-  body: Localized;
-  resultMessages: Record<string, Localized>;
-  stages: Record<StageKey, StageCfg>;
-};
-type StageCfg = { publishAt: Date | null; info: Localized; pass: Localized; fail: Localized };
-/** Kolom hasil per tahap (nama kolom tetap — tidak pernah dari input). */
-const STAGE_COLUMN: Record<StageKey, string> = { admin: 'res_admin', test: 'res_test', interview: 'res_interview' };
 
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
-const iso = (d: Date | null) => (d ? d.toISOString() : null);
-const parseJson = <T>(s: unknown, fallback: T): T => {
-  if (typeof s !== 'string') return (s as T) ?? fallback;
-  try { return JSON.parse(s) as T; } catch { return fallback; }
-};
 
 function readCookies(req: Request): Record<string, string> {
   const out: Record<string, string> = {};
@@ -80,7 +69,7 @@ function readCookies(req: Request): Record<string, string> {
   return out;
 }
 
-export function createApp({ pool, cfg, verifyGoogle }: Deps) {
+export function createApp({ pool, cfg, verifyGoogle, mailer }: Deps) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 'loopback'); // di cPanel, Passenger meneruskan dari localhost
@@ -169,36 +158,9 @@ export function createApp({ pool, cfg, verifyGoogle }: Deps) {
   }
 
   // ---- Pengaturan & jadwal ----------------------------------------------------
-  async function loadSettings(): Promise<Settings> {
-    const [rows] = await pool.execute<RowDataPacket[]>('SELECT * FROM settings WHERE id = 1');
-    const r = rows[0];
-    return {
-      regOpen: !!r.reg_open,
-      regDeadline: r.reg_deadline ?? null,
-      announceAt: r.announce_at ?? null,
-      title: parseJson(r.announce_title, { id: '', en: '' }),
-      body: parseJson(r.announce_body, { id: '', en: '' }),
-      resultMessages: parseJson(r.result_messages, {}),
-      stages: parseStages(r.stages),
-    };
-  }
-  function parseStages(raw: unknown): Record<StageKey, StageCfg> {
-    const src = parseJson<Record<string, Record<string, unknown>>>(raw, {});
-    const loc = (v: unknown): Localized => {
-      const o = (v && typeof v === 'object' ? v : {}) as Record<string, unknown>;
-      return { id: typeof o.id === 'string' ? o.id : '', en: typeof o.en === 'string' ? o.en : '' };
-    };
-    const out = {} as Record<StageKey, StageCfg>;
-    for (const k of STAGES) {
-      const s = src[k] ?? {};
-      const d = typeof s.publishAt === 'string' ? new Date(s.publishAt) : null;
-      out[k] = { publishAt: d && !Number.isNaN(d.getTime()) ? d : null, info: loc(s.info), pass: loc(s.pass), fail: loc(s.fail) };
-    }
-    return out;
-  }
   const stagesJson = (st: Record<StageKey, StageCfg>) =>
     Object.fromEntries(STAGES.map((k) => [k, { ...st[k], publishAt: iso(st[k].publishAt) }]));
-  const released = (s: Settings, now = new Date()) => !!s.announceAt && s.announceAt <= now;
+  const loadSettings = () => loadSettingsFrom(pool);
   /** Hasil tahap terlihat peserta hanya setelah waktu umumnya. */
   function stageViews(s: Settings, a: RowDataPacket | null, now = new Date()) {
     return STAGES.map((key) => {
@@ -211,8 +173,6 @@ export function createApp({ pool, cfg, verifyGoogle }: Deps) {
       };
     });
   }
-  const registrationOpen = (s: Settings, now = new Date()) =>
-    s.regOpen && (!s.regDeadline || now < s.regDeadline) && !released(s, now);
 
   // ---- Data pendaftar ---------------------------------------------------------
   function applicantJson(r: RowDataPacket, showStatus: boolean, admin = false) {
@@ -541,6 +501,20 @@ export function createApp({ pool, cfg, verifyGoogle }: Deps) {
     await rm(pdfPath(id), { force: true });
     await pool.execute('DELETE FROM applicants WHERE id = ?', [id]);
     res.json({ ok: true });
+  }));
+
+  // ---- Email pemberitahuan -----------------------------------------------------
+  const send: Mailer | null = mailer ?? (cfg.smtp ? smtpMailer(cfg.smtp) : null);
+
+  app.get('/api/admin/notify', h(async (req, res) => {
+    await requireAdmin(req);
+    res.json(await notificationStatus(pool, !!send));
+  }));
+
+  app.post('/api/admin/notify', h(async (req, res) => {
+    await requireAdmin(req);
+    if (!send) throw new HttpError(503, 'MAIL_NOT_CONFIGURED');
+    res.json(await runNotifications(pool, cfg, send));
   }));
 
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'NOT_FOUND')));

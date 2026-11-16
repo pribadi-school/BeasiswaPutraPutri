@@ -3,7 +3,8 @@ import { api } from '../../lib/api';
 import { useI18n, type TKey } from '../../lib/i18n';
 import { fromInputWib, toInputWib } from '../../lib/time';
 import { AppError, emptyStages, STAGES, type AdminSettings, type Localized, type StageKey, type StageSettings, type Status } from '../../lib/types';
-import { btnPrimary, Card, ErrorBox, Field, inputCls, useErrorText } from '../../components/ui';
+import { AlertCircle, CheckCircle2, Mail, Send } from 'lucide-react';
+import { btnPrimary, btnSecondary, Card, ErrorBox, Field, inputCls, useErrorText } from '../../components/ui';
 import { useAdmin } from './AdminPage';
 
 const RESULT_STATUSES = ['lulus', 'cadangan', 'tidak_lulus'] as const;
@@ -23,6 +24,43 @@ function LocalizedInput({ idp, label, value, onChange, rows }: { idp: string; la
         </Field>
       ))}
     </fieldset>
+  );
+}
+
+/** Status email pemberitahuan + tombol kirim sekarang. */
+function MailPanel() {
+  const { t } = useI18n();
+  const errText = useErrorText();
+  const [st, setSt] = useState<{ configured: boolean; pending: number } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const refresh = () => api.adminNotifyStatus().then(setSt).catch((e) => setErr(errText(e)));
+  useEffect(() => { void refresh(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function run() {
+    setBusy(true); setErr(null); setMsg(null);
+    try { const r = await api.adminNotifyRun(); setMsg(t('mail.result', r)); await refresh(); }
+    catch (e) { setErr(errText(e)); } finally { setBusy(false); }
+  }
+  return (
+    <Card className="space-y-3">
+      <h2 className="flex items-center gap-2 text-lg font-bold"><Mail size={20} className="text-action" aria-hidden /> {t('mail.title')}</h2>
+      <p className="text-sm text-muted-foreground">{t('mail.lead')}</p>
+      {st && (
+        <p className={`flex items-center gap-2 text-sm font-semibold ${st.configured ? 'text-foreground' : 'text-accent-text'}`}>
+          {st.configured ? <CheckCircle2 size={18} className="text-success" aria-hidden /> : <AlertCircle size={18} aria-hidden />}
+          {st.configured ? t('mail.on') : t('mail.off')} {st.configured && t('mail.pending', { n: st.pending })}
+        </p>
+      )}
+      {st?.configured && (
+        <button type="button" onClick={() => void run()} disabled={busy || st.pending === 0} className={btnSecondary}>
+          <Send size={18} aria-hidden /> {busy ? t('mail.sending') : t('mail.send')}
+        </button>
+      )}
+      {msg && <p role="status" className="text-sm font-medium text-foreground">{msg}</p>}
+      {err && <ErrorBox>{err}</ErrorBox>}
+    </Card>
   );
 }
 
@@ -72,6 +110,7 @@ export function SettingsTab() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-extrabold">{t('adm.tab.settings')}</h1>
+      <MailPanel />
       <Card className="space-y-4">
         <label className="flex items-center gap-3">
           <input type="checkbox" checked={s.regOpen} onChange={(e) => setS({ ...s, regOpen: e.target.checked })} className="size-6 accent-action" />

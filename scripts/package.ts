@@ -25,7 +25,7 @@ for (const need of ['dist/index.html', 'server-dist/server/index.js']) {
 }
 
 const pkg = JSON.parse(readFileSync(p('package.json'), 'utf8'));
-const serverDeps = ['express', 'mysql2', 'bcryptjs', 'jose', 'dotenv'];
+const serverDeps = ['express', 'mysql2', 'bcryptjs', 'jose', 'dotenv', 'nodemailer'];
 const out = p('deploy/');
 rmSync(out, { recursive: true, force: true });
 mkdirSync(p('deploy/server'), { recursive: true });
@@ -43,6 +43,7 @@ writeFileSync(p('deploy/package.json'), JSON.stringify({
     'admin:set': 'node server-dist/server/admin-cli.js set',
     'admin:remove': 'node server-dist/server/admin-cli.js remove',
     'admin:list': 'node server-dist/server/admin-cli.js list',
+    'notify': 'node server-dist/server/notify-cli.js',
   },
   dependencies: Object.fromEntries(serverDeps.map((d) => [d, pkg.dependencies[d]])),
 }, null, 2) + '\n');

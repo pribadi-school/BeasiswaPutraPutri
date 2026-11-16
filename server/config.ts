@@ -1,7 +1,18 @@
 /**
- * Pengaturan server dari environment variable (di cPanel: Setup Node.js App →
- * Environment variables; di komputer: file .env). Rahasia TIDAK pernah dikirim ke browser.
+ * Pengaturan server dari environment variable (di cPanel: file .env di folder
+ * aplikasi, chmod 600; di komputer: .env). Rahasia TIDAK pernah dikirim ke browser.
  */
+export type SmtpConfig = {
+  host: string;
+  port: number;
+  /** true = SSL langsung (port 465); false = STARTTLS (port 587). */
+  secure: boolean;
+  user: string;
+  pass: string;
+  /** Pengirim, mis. "Panitia Beasiswa <beasiswa@pribadidepok.sch.id>". */
+  from: string;
+};
+
 export type Config = {
   port: number;
   production: boolean;
@@ -14,6 +25,12 @@ export type Config = {
   uploadDir: string;
   /** Folder hasil build tampilan (dist/). */
   staticDir: string | null;
+  /** Email pemberitahuan. null = tidak mengirim email. */
+  smtp: SmtpConfig | null;
+  /** Alamat situs untuk tautan di email. */
+  appUrl: string;
+  /** Batas email per putaran (sesuaikan dengan batas kirim hosting). */
+  notifyMaxPerRun: number;
 };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -27,6 +44,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     if (!v) throw new Error(`Environment variable ${k} belum diisi.`);
     return v;
   };
+  const smtpHost = env.SMTP_HOST?.trim();
+  const smtpPort = Number(env.SMTP_PORT ?? 465);
   return {
     port: Number(env.PORT ?? 8787),
     production,
@@ -41,5 +60,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     devLogin,
     uploadDir: need('UPLOAD_DIR'),
     staticDir: env.STATIC_DIR?.trim() || null,
+    smtp: smtpHost ? {
+      host: smtpHost,
+      port: smtpPort,
+      secure: env.SMTP_SECURE ? env.SMTP_SECURE !== 'false' : smtpPort === 465,
+      user: need('SMTP_USER'),
+      pass: env.SMTP_PASS ?? '',
+      from: env.MAIL_FROM?.trim() || `Panitia Beasiswa Putra-Putri Daerah <${env.SMTP_USER?.trim()}>`,
+    } : null,
+    appUrl: (env.APP_URL?.trim() || 'https://beasiswa.pribadidepok.sch.id').replace(/\/+$/, ''),
+    notifyMaxPerRun: Math.max(1, Number(env.NOTIFY_MAX_PER_RUN ?? 40)),
   };
 }

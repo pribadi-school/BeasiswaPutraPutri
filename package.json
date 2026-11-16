@@ -18,7 +18,8 @@
     "test": "vitest run",
     "test:server": "vitest run tests/server",
     "local": "node scripts/local-stack.ts",
-    "deploy": "node scripts/publish-deploy.ts"
+    "deploy": "node scripts/publish-deploy.ts",
+    "notify": "node --env-file-if-exists=.env server/notify-cli.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -27,6 +28,7 @@
     "jose": "^6.2.17",
     "lucide-react": "^1.52.0",
     "mysql2": "^3.24.6",
+    "nodemailer": "^10.6.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-router": "^8.4.0"
@@ -35,6 +37,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "@types/express": "^4.17.25",
     "@types/node": "^26.6.4",
+    "@types/nodemailer": "^8.0.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",

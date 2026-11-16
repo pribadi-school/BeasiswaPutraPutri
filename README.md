@@ -32,8 +32,19 @@ melihat hasil seleksi setelah waktu pengumuman tiba.
 - **Berkas kelengkapan**: SATU PDF (maks 10 MB) berisi KTP orang tua/wali, KK,
   rapor, dan sertifikat lomba/olimpiade (bila ada). Server memeriksa isinya
   benar-benar PDF (diawali `%PDF-`).
-- **Jadwal**: tidak ada tanggal pembukaan; pendaftaran langsung dibuka.
-  Ditutup **26 Desember 2026, 23.59 WIB**. Penutupan diatur panitia di
+- **Jadwal awal** (`src/lib/schedule.ts`, dipasang sekali ke database):
+
+  | Tahap | Jadwal |
+  |---|---|
+  | Pendaftaran | dibuka sekarang, ditutup **26 Desember 2026, 23.59 WIB** |
+  | Seleksi Administrasi | sesudah pendaftaran ditutup |
+  | Tes Akademik & Tes IQ | **Sabtu, 9 Januari 2027** |
+  | Interview | **Sabtu, 16 Januari 2027** |
+  | Pengumuman akhir | **Rabu, 20 Januari 2027, 09.00 WIB** |
+
+  Waktu umum hasil Seleksi Administrasi, Tes, dan Interview diisi panitia.
+  Semua jadwal bisa diubah di **Admin → Pengaturan**.
+- **Penutupan**: tidak ada tanggal pembukaan. Penutupan diatur panitia di
   **Admin → Pengaturan**, bersama saklar "Pendaftaran aktif" untuk menutup
   sementara. Waktu pengumuman harus sesudah penutupan.
 - **Draf otomatis**: isian formulir tersimpan di HP. Draf dihapus setelah
@@ -154,6 +165,14 @@ DB_USER=pribadisch_beasiswa
 DB_PASSWORD=GANTI_DENGAN_PASSWORD_DATABASE
 GOOGLE_CLIENT_ID=GANTI_DENGAN_CLIENT_ID.apps.googleusercontent.com
 UPLOAD_DIR=/home/pribadisch/beasiswa-data/berkas
+APP_URL=https://beasiswa.pribadidepok.sch.id
+# Email pemberitahuan (lihat langkah 8). Kosongkan SMTP_HOST bila belum dipakai.
+SMTP_HOST=mail.pribadidepok.sch.id
+SMTP_PORT=465
+SMTP_USER=beasiswa@pribadidepok.sch.id
+SMTP_PASS=GANTI_DENGAN_PASSWORD_EMAIL
+MAIL_FROM=Panitia Beasiswa Putra-Putri Daerah <beasiswa@pribadidepok.sch.id>
+NOTIFY_MAX_PER_RUN=40
 EOF
 chmod 600 .env
 ```
@@ -231,6 +250,42 @@ Kalau server tidak mau jalan, lihat log-nya:
 tail -n 50 ~/repositories/beasiswa/stderr.log
 ```
 
+### 8. Email pemberitahuan
+
+Aplikasi mengirim email otomatis ke orang tua: ke email akun Google dan ke
+email orang tua di formulir, bila berbeda. Isinya ID/EN, mengikuti bahasa saat
+mendaftar. Email dikirim untuk:
+- pendaftaran diterima, termasuk pengingat bila PDF belum diunggah;
+- hasil setiap tahap (lolos/tidak lolos), **setelah** waktu umum tahap itu,
+  berisi pesan panitia dan info tahap berikutnya;
+- pengumuman akhir.
+
+Setiap email hanya terkirim **sekali** (dicatat di tabel `notifications`).
+
+1. **cPanel → Email Accounts → Create**: buat `beasiswa@pribadidepok.sch.id`
+   dengan password panjang.
+2. Isi `SMTP_PASS` di `.env` dengan password itu, lalu mulai ulang server:
+   ```bash
+   nano ~/repositories/beasiswa/.env && touch ~/repositories/beasiswa/tmp/restart.txt
+   ```
+3. **cPanel → Email Deliverability**: pastikan **SPF** dan **DKIM** untuk
+   `pribadidepok.sch.id` berstatus *Valid*. Tanpa itu, email mudah masuk spam.
+4. **cPanel → Cron Jobs → Add New Cron Job**, setiap 15 menit
+   (*/15 * * * *). Command:
+   ```bash
+   cd /home/pribadisch/repositories/beasiswa && $(ls -d /home/pribadisch/nodevenv/repositories/beasiswa/*/ | sort -V | tail -1)bin/node server-dist/server/notify-cli.js >> /home/pribadisch/beasiswa-data/notify.log 2>&1
+   ```
+5. Cek di **Admin → Pengaturan → Email pemberitahuan**. Bagian ini
+   menampilkan apakah email aktif dan berapa email yang antre. Tombol **Kirim
+   sekarang** mengirim tanpa menunggu cron. Riwayat cron tercatat di:
+   ```bash
+   tail -n 20 ~/beasiswa-data/notify.log
+   ```
+
+`NOTIFY_MAX_PER_RUN` membatasi jumlah email per putaran: 40 email tiap 15
+menit = 160 per jam. Turunkan angkanya bila batas kirim per jam paket hosting
+lebih kecil. Email yang belum terkirim akan dikirim di putaran berikutnya.
+
 ### Memperbarui aplikasi
 
 1. Push perubahan ke `main`. GitHub Actions akan mem-build dan mengirimkannya
@@ -302,6 +357,7 @@ sungguhan.
 | `npm run deploy` | build + kirim ke branch `deploy` (otomatis lewat GitHub Actions setiap push ke `main`) |
 | `npm run package` | membuat folder `deploy/` dan `beasiswa-deploy.zip` |
 | `npm run admin:set -- <email>` | membuat panitia / mengganti password |
+| `npm run notify` | kirim email pemberitahuan yang sudah waktunya (di server: lewat Cron Job) |
 
 ## Mengubah aplikasi
 

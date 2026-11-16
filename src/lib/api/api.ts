@@ -44,4 +44,8 @@ export interface Api {
   adminDocumentUrl(a: Applicant): Promise<string>;
   /** Menghapus pendaftar beserta berkasnya. */
   adminDelete(a: Applicant): Promise<void>;
+  /** Email pemberitahuan: sudah diatur (SMTP)? berapa yang menunggu dikirim? */
+  adminNotifyStatus(): Promise<{ configured: boolean; pending: number }>;
+  /** Kirim email yang sudah waktunya sekarang (biasanya otomatis lewat Cron Job). */
+  adminNotifyRun(): Promise<{ sent: number; failed: number; remaining: number }>;
 }
