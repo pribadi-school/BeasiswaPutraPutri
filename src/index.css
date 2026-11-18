@@ -32,6 +32,11 @@
   --color-accent-tint: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
   --color-success: var(--color-gradient-end);
   --color-success-tint: color-mix(in srgb, var(--color-gradient-end) 14%, var(--color-surface));
+  /* Toska untuk tombol utama & teks toska (tema beranda, referensi UI): versi gelap
+     dari gradient-end agar teks putih lolos AA (±4,8:1). */
+  --color-teal: color-mix(in srgb, var(--color-gradient-end) 72%, var(--color-foreground));
+  --color-teal-hover: color-mix(in srgb, var(--color-gradient-end) 58%, var(--color-foreground));
+  --color-teal-tint: color-mix(in srgb, var(--color-gradient-end) 10%, var(--color-surface));
   /* Teks toska yang cukup kontras di latar terang. */
   --color-success-text: color-mix(in srgb, var(--color-gradient-end) 70%, var(--color-foreground));
   /* Teks oranye di atas putih: pakai versi gelap agar kontras cukup. */

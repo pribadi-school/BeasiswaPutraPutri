@@ -37,7 +37,7 @@ export function LoginPage() {
   const gisFailed = useCallback(() => setError(t('login.googleFailed')), [t]);
 
   return (
-    <div className="mx-auto max-w-md space-y-4">
+    <div className="mx-auto max-w-md space-y-4 px-4 py-8">
       <div className="overflow-hidden rounded-lg bg-surface shadow-e2">
         <div className="bg-brand-gradient flex items-center justify-between gap-2 px-5 py-4 text-white">
           <div>
