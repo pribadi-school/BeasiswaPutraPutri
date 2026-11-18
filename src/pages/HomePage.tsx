@@ -7,6 +7,7 @@ import { formatWib } from '../lib/time';
 import type { PublicSettings } from '../lib/types';
 import { IconTile, SectionHeader } from '../components/ui';
 import { WelcomeBanner } from '../components/WelcomeBanner';
+import { ScholarshipInfo } from '../components/ScholarshipInfo';
 
 export function HomePage() {
   const { t, lang } = useI18n();
@@ -53,6 +54,7 @@ export function HomePage() {
           <ul className="space-y-1 text-sm text-foreground">{info.map((x) => <li key={x}>{x}</li>)}</ul>
         </section>
       )}
+      <ScholarshipInfo />
     </div>
   );
 }
