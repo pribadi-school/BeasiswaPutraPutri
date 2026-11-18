@@ -27,8 +27,9 @@ export function HomePage() {
 
   return (
     <div className="space-y-6">
-      <WelcomeBanner eyebrow={t('app.school')} title={t('home.title')} subtitle={t('home.lead')}>
-        <Link to="/masuk" className="inline-flex min-h-12 items-center justify-center rounded-full bg-surface px-6 font-semibold text-action shadow-e2 transition hover:bg-action-tint">
+      <WelcomeBanner eyebrow={t('app.school')} title={t('home.title')} subtitle={t('home.lead')}
+        photo={{ src: '/siswa-berprestasi.webp', alt: t('home.photoAlt'), width: 860, height: 1010 }}>
+        <Link to="/masuk" className="inline-flex min-h-12 w-full items-center justify-center rounded-full bg-surface px-6 py-2 text-center font-semibold sm:w-auto text-action shadow-e2 transition hover:bg-action-tint">
           {!s || s.regOpen ? t('home.cta') : t('home.ctaBack')}
         </Link>
       </WelcomeBanner>
