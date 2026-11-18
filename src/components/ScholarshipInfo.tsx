@@ -53,7 +53,6 @@ const C = {
       'Penerima beasiswa diharapkan menjaga prestasi akademik dan mengikuti aturan yang berlaku di sekolah.',
     ],
     announceH: 'Pengumuman', rulesH: 'Ketentuan lain',
-    address: 'Pribadi School Depok · Jl. Margonda Raya No.229, Beji, Depok',
   },
   en: {
     title: 'Scholarship information',
@@ -99,7 +98,6 @@ const C = {
       'Scholarship recipients are expected to maintain their academic achievement and follow the school rules.',
     ],
     announceH: 'Announcement', rulesH: 'Other terms',
-    address: 'Pribadi School Depok · Jl. Margonda Raya No.229, Beji, Depok',
   },
 } as const;
 
@@ -150,7 +148,6 @@ export function ScholarshipInfo({ openFirst = true }: { openFirst?: boolean }) {
             </div>
           ))}
         </div>
-        <p className="text-xs text-muted-foreground">{c.address}</p>
       </Fold>
 
       <Fold Icon={CalendarDays} title={c.scheduleT}>
