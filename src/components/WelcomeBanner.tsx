@@ -15,7 +15,7 @@ export function WelcomeBanner({ eyebrow, title, subtitle, children, photo }: {
   const text = (
     <div className="relative z-10 min-w-0 flex-1">
       {eyebrow && <p className="text-sm text-on-action-muted">{eyebrow}</p>}
-      <h1 className={`mt-1 font-extrabold leading-tight text-white sm:mt-3 ${photo ? 'text-4xl tracking-tight sm:text-5xl lg:text-6xl' : 'text-2xl sm:text-3xl'}`}>
+      <h1 className={`mt-1 font-extrabold leading-tight text-white sm:mt-3 ${photo ? 'text-[2.6rem] !leading-[0.95] tracking-tight sm:text-[3.4rem] lg:text-[4.25rem]' : 'text-2xl sm:text-3xl'}`}>
         {/* Tanda hubung tak terputus: "Putra-Putri" tidak terpotong di akhir baris. */}
         {title.replace(/(\p{L})-(\p{L})/gu, '$1‑$2')}
       </h1>
