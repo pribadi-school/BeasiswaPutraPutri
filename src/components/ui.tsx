@@ -7,12 +7,12 @@ export const inputCls =
   'w-full min-h-12 rounded-sm border border-border-strong bg-surface px-3 text-base text-foreground placeholder:text-muted-foreground aria-[invalid=true]:border-destructive aria-[invalid=true]:bg-destructive-tint disabled:bg-surface-muted';
 
 export const btnPrimary =
-  'inline-flex min-h-12 items-center justify-center gap-2 rounded-full bg-action px-6 text-base font-semibold text-white shadow-e2 transition hover:bg-action-hover disabled:opacity-60 disabled:shadow-none';
+  'inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-teal px-6 text-base font-semibold text-white shadow-e2 transition hover:bg-teal-hover disabled:opacity-60 disabled:shadow-none';
 export const btnSecondary =
-  'inline-flex min-h-12 items-center justify-center gap-2 rounded-full border border-border-strong bg-surface px-6 text-base font-semibold text-action transition hover:bg-action-tint disabled:opacity-60';
-/** Tombol pil kecil di dalam kartu (seperti "View" di referensi). */
+  'inline-flex min-h-12 items-center justify-center gap-2 rounded-md border border-action bg-surface px-6 text-base font-semibold text-action transition hover:bg-action-tint disabled:opacity-60';
+/** Tombol kecil di dalam kartu (seperti "View" di referensi). */
 export const btnPill =
-  'inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full bg-action px-5 text-sm font-semibold text-white transition hover:bg-action-hover';
+  'inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md bg-teal px-5 text-sm font-semibold text-white transition hover:bg-teal-hover';
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return <section className={`rounded-lg bg-surface p-4 shadow-e2 sm:p-6 ${className}`}>{children}</section>;

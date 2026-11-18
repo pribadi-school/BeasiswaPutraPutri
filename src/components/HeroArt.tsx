@@ -4,12 +4,13 @@ import { Award, BookOpen, GraduationCap, MapPin } from 'lucide-react';
  * Ilustrasi banner (pengganti karakter 3D di referensi), dibuat dari ikon +
  * ubin agar ringan dan tidak butuh gambar. Murni dekoratif.
  */
-export function HeroArt({ compact = false }: { compact?: boolean }) {
+/** `light`: untuk latar terang (lingkaran berwarna, bukan putih transparan). */
+export function HeroArt({ compact = false, light = false }: { compact?: boolean; light?: boolean }) {
   const s = compact ? 0.62 : 1;
   return (
     <div aria-hidden className="pointer-events-none relative shrink-0" style={{ width: 220 * s, height: 170 * s }}>
-      <div className="absolute rounded-full bg-white/15" style={{ inset: `${10 * s}px ${8 * s}px ${0}px ${20 * s}px` }} />
-      <div className="absolute rounded-full bg-white/10" style={{ width: 70 * s, height: 70 * s, right: 0, top: 0 }} />
+      <div className={`absolute rounded-full ${light ? 'bg-brand-gradient opacity-90' : 'bg-white/15'}`} style={{ inset: `${10 * s}px ${8 * s}px ${0}px ${20 * s}px` }} />
+      <div className={`absolute rounded-full ${light ? 'bg-teal-tint' : 'bg-white/10'}`} style={{ width: 70 * s, height: 70 * s, right: 0, top: 0 }} />
       {/* Topi wisuda */}
       <div className="animate-float absolute flex -rotate-6 items-center justify-center rounded-md bg-surface text-action shadow-e3"
         style={{ width: 96 * s, height: 96 * s, left: 62 * s, top: 34 * s }}>
