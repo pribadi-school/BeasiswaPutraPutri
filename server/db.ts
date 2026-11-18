@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import mysql from 'mysql2/promise';
 import type { Config } from './config.ts';
-import { DEFAULT_ANNOUNCE_AT, defaultStages } from '../src/lib/schedule.ts';
+import { DEFAULT_ANNOUNCE_AT, defaultStages, OLD_STAGE_INFO } from '../src/lib/schedule.ts';
 
 export type Pool = mysql.Pool;
 
@@ -54,6 +54,17 @@ export async function migrate(pool: Pool, schemaPath: string): Promise<void> {
       `UPDATE settings SET announce_at = COALESCE(announce_at, ?), stages = COALESCE(stages, ?), stages_seeded = 1
         WHERE id = 1 AND stages_seeded = 0`,
       [new Date(DEFAULT_ANNOUNCE_AT), JSON.stringify(defaultStages())]);
+    // Info tahap bawaan lama → teks baru (lokasi tes/wawancara), bila belum diubah panitia.
+    const [[row]] = await conn.query<mysql.RowDataPacket[]>('SELECT stages FROM settings WHERE id = 1');
+    if (row?.stages) {
+      const stages = JSON.parse(row.stages);
+      const fresh = defaultStages();
+      let changed = false;
+      for (const [k, old] of Object.entries(OLD_STAGE_INFO) as [keyof typeof fresh, string][]) {
+        if (stages[k]?.info?.id === old) { stages[k].info = fresh[k].info; changed = true; }
+      }
+      if (changed) await conn.query('UPDATE settings SET stages = ? WHERE id = 1', [JSON.stringify(stages)]);
+    }
   } finally {
     conn.release();
   }

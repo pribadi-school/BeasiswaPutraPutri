@@ -29,9 +29,12 @@ melihat hasil seleksi setelah waktu pengumuman tiba.
 - **Isian wajib**: semua, kecuali penghasilan keluarga dan jumlah saudara
   kandung. NISN (10 angka), email orang tua, dan prestasi juga wajib. Prestasi
   boleh diisi "-" bila belum ada.
-- **Berkas kelengkapan**: SATU PDF (maks 10 MB) berisi KTP orang tua/wali, KK,
-  rapor, dan sertifikat lomba/olimpiade (bila ada). Server memeriksa isinya
-  benar-benar PDF (diawali `%PDF-`).
+- **Berkas kelengkapan** (sesuai Juknis): SATU PDF (maks 10 MB) berisi rapor semester
+  terakhir, KTP orang tua/wali, pas foto 3×4, sertifikat prestasi terkurasi Puspresnas
+  (min. bintang 2). Server memeriksa isinya benar-benar PDF (diawali `%PDF-`).
+- **Informasi Beasiswa** di Beranda orang tua (`src/components/ScholarshipInfo.tsx`):
+  pendahuluan, jadwal & tahapan, persyaratan, dokumen, pengumuman & ketentuan,
+  sesuai dokumen Juknis sekolah.
 - **Jadwal awal** (`src/lib/schedule.ts`, dipasang sekali ke database):
 
   | Tahap | Jadwal |

@@ -32,6 +32,8 @@
   --color-accent-tint: color-mix(in srgb, var(--color-accent) 10%, var(--color-surface));
   --color-success: var(--color-gradient-end);
   --color-success-tint: color-mix(in srgb, var(--color-gradient-end) 14%, var(--color-surface));
+  /* Teks toska yang cukup kontras di latar terang. */
+  --color-success-text: color-mix(in srgb, var(--color-gradient-end) 70%, var(--color-foreground));
   /* Teks oranye di atas putih: pakai versi gelap agar kontras cukup. */
   --color-accent-text: color-mix(in srgb, var(--color-accent) 65%, var(--color-foreground));
 

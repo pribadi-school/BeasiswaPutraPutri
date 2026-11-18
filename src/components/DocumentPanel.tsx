@@ -6,7 +6,8 @@ import { formatWib } from '../lib/time';
 import { AppError, type DocumentInfo } from '../lib/types';
 import { btnPill, btnSecondary, ErrorBox, useErrorText } from './ui';
 
-export const DOC_ITEMS: TKey[] = ['doc.item.ktp', 'doc.item.kk', 'doc.item.rapor', 'doc.item.cert'];
+/** Isi PDF sesuai Juknis (dokumen pendaftaran nomor 2–5). */
+export const DOC_ITEMS: TKey[] = ['doc.item.rapor', 'doc.item.ktp', 'doc.item.photo', 'doc.item.cert'];
 
 /**
  * Membuka tautan sementara di tab baru. Tab dibuka lebih dulu (sinkron, saat

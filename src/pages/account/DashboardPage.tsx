@@ -10,6 +10,7 @@ import { clearDraft, draftKeyFor } from '../../lib/draft';
 import { WelcomeBanner } from '../../components/WelcomeBanner';
 import { btnPill, ErrorBox, SectionHeader, useErrorText } from '../../components/ui';
 import { buildFlow, SelectionFlow } from '../../components/SelectionFlow';
+import { ScholarshipInfo } from '../../components/ScholarshipInfo';
 import { useAccount } from './AccountLayout';
 
 function today(lang: 'id' | 'en') {
@@ -29,6 +30,7 @@ export function DashboardPage() {
     return (
       <div className="space-y-5">
         <WelcomeBanner eyebrow={today(lang)} title={t('dash.welcomeNew')} subtitle={me.canEdit ? t('dash.subNew') : undefined} />
+        <ScholarshipInfo />
         {!me.canEdit ? <ErrorBox>{t('e.CLOSED')}</ErrorBox> : (
           <>
             <div>
@@ -151,6 +153,8 @@ export function DashboardPage() {
               ))}
             </div>
           </section>
+
+          <ScholarshipInfo openFirst={false} />
         </div>
 
         <aside>
