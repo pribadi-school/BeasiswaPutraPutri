@@ -2,6 +2,14 @@
 export const DEFAULT_REG_DEADLINE = '2026-12-26T16:59:00.000Z';
 /** 20 Jan 2027 09.00 WIB. */
 export const DEFAULT_ANNOUNCE_AT = '2027-01-20T02:00:00.000Z';
+/**
+ * Info tahap bawaan versi lama. Saat server mulai, info yang masih sama persis
+ * dengan teks lama diganti teks baru di atas (yang sudah diubah panitia tidak disentuh).
+ */
+export const OLD_STAGE_INFO = {
+    test: 'Sabtu, 9 Januari 2027. Waktu dan tempat diinformasikan panitia.',
+    interview: 'Sabtu, 16 Januari 2027. Waktu dan tempat diinformasikan panitia.',
+};
 export const defaultStages = () => ({
     admin: {
         publishAt: null,
@@ -21,8 +29,8 @@ export const defaultStages = () => ({
     test: {
         publishAt: null,
         info: {
-            id: 'Sabtu, 9 Januari 2027. Waktu dan tempat diinformasikan panitia.',
-            en: 'Saturday, 9 January 2027. Time and place will be announced by the committee.',
+            id: 'Sabtu, 9 Januari 2027, online di latihan.id. Materi: Bahasa Inggris, Matematika, dan tes IQ dengan nilai minimum.',
+            en: 'Saturday, 9 January 2027, online at latihan.id. English, Mathematics and an IQ test with minimum scores.',
         },
         pass: {
             id: 'Selamat, ananda lolos Tes Akademik & Tes IQ dan berhak mengikuti Interview.',
@@ -36,8 +44,8 @@ export const defaultStages = () => ({
     interview: {
         publishAt: null,
         info: {
-            id: 'Sabtu, 16 Januari 2027. Waktu dan tempat diinformasikan panitia.',
-            en: 'Saturday, 16 January 2027. Time and place will be announced by the committee.',
+            id: 'Sabtu, 16 Januari 2027 di Pribadi School, Jl. Margonda Raya No.229, Beji, Depok. Menggali motivasi, karakter, dan kesiapan siswa.',
+            en: 'Saturday, 16 January 2027 at Pribadi School, Jl. Margonda Raya No.229, Beji, Depok. Explores motivation, character and readiness.',
         },
         pass: {
             id: 'Terima kasih telah mengikuti interview. Hasil akhir diumumkan 20 Januari 2027.',

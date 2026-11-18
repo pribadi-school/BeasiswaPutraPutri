@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import mysql from 'mysql2/promise';
-import { DEFAULT_ANNOUNCE_AT, defaultStages } from '../src/lib/schedule.js';
+import { DEFAULT_ANNOUNCE_AT, defaultStages, OLD_STAGE_INFO } from '../src/lib/schedule.js';
 export function createPool(cfg) {
     return mysql.createPool({
         ...cfg,
@@ -45,6 +45,21 @@ export async function migrate(pool, schemaPath) {
         // (tidak menimpa yang sudah diatur panitia).
         await conn.query(`UPDATE settings SET announce_at = COALESCE(announce_at, ?), stages = COALESCE(stages, ?), stages_seeded = 1
         WHERE id = 1 AND stages_seeded = 0`, [new Date(DEFAULT_ANNOUNCE_AT), JSON.stringify(defaultStages())]);
+        // Info tahap bawaan lama → teks baru (lokasi tes/wawancara), bila belum diubah panitia.
+        const [[row]] = await conn.query('SELECT stages FROM settings WHERE id = 1');
+        if (row?.stages) {
+            const stages = JSON.parse(row.stages);
+            const fresh = defaultStages();
+            let changed = false;
+            for (const [k, old] of Object.entries(OLD_STAGE_INFO)) {
+                if (stages[k]?.info?.id === old) {
+                    stages[k].info = fresh[k].info;
+                    changed = true;
+                }
+            }
+            if (changed)
+                await conn.query('UPDATE settings SET stages = ? WHERE id = 1', [JSON.stringify(stages)]);
+        }
     }
     finally {
         conn.release();
