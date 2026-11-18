@@ -1,5 +1,5 @@
 import { Link, Outlet } from 'react-router';
-import { ArrowRight, CalendarDays, Languages, MapPin } from 'lucide-react';
+import { ArrowRight, Languages, MapPin, Phone } from 'lucide-react';
 import { useI18n } from '../lib/i18n';
 import { api } from '../lib/api';
 
@@ -77,7 +77,11 @@ export function Layout() {
             <h2 className="mb-3 text-sm font-bold text-foreground">{t('footer.contact')}</h2>
             <ul className="space-y-3 text-sm text-muted-foreground">
               <li className="flex gap-2"><MapPin size={16} className="mt-0.5 shrink-0 text-teal" aria-hidden />Jl. Margonda Raya No.229, Beji, Depok, Jawa Barat</li>
-              <li className="flex gap-2"><CalendarDays size={16} className="mt-0.5 shrink-0 text-teal" aria-hidden />{t('footer.dates')}</li>
+              <li className="flex gap-2"><Phone size={16} className="mt-0.5 shrink-0 text-teal" aria-hidden />
+                <span>{t('footer.admission')}<br />
+                  <a href="https://wa.me/6281292900095" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-9 items-center font-semibold text-foreground hover:text-teal">0812 9290 0095</a>
+                </span>
+              </li>
             </ul>
           </div>
         </div>

@@ -10,19 +10,6 @@ import { formatWib } from '../lib/time';
 import type { PublicSettings } from '../lib/types';
 import { ScholarshipInfo } from '../components/ScholarshipInfo';
 
-/** Kartu kecil yang "mengambang" di samping foto (pola referensi). */
-function FloatCard({ Icon, title, sub, className }: { Icon: LucideIcon; title: string; sub: string; className: string }) {
-  return (
-    <div className={`absolute z-10 flex items-center gap-2.5 rounded-lg bg-surface/95 p-2.5 shadow-e3 backdrop-blur sm:p-3 ${className}`}>
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-teal-tint text-teal sm:size-10"><Icon size={20} aria-hidden /></span>
-      <span className="leading-tight">
-        <span className="block text-sm font-bold text-foreground">{title}</span>
-        <span className="block text-xs text-muted-foreground">{sub}</span>
-      </span>
-    </div>
-  );
-}
-
 export function HomePage() {
   const { t, lang } = useI18n();
   const [s, setS] = useState<PublicSettings | null>(null);
@@ -80,9 +67,6 @@ export function HomePage() {
             <img src="/siswa-berprestasi.webp" alt={t('home.photoAlt')} width={860} height={1010} fetchPriority="high" decoding="async"
               style={{ maskImage: 'linear-gradient(to bottom, transparent 0%, #000 18%)', WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, #000 18%)' }}
               className="relative block h-auto w-full" />
-            <FloatCard Icon={GraduationCap} title={t('hero.f1.t')} sub={t('hero.f1.d')} className="left-0 top-[22%] sm:-left-6" />
-            <FloatCard Icon={MapPin} title={t('hero.f2.t')} sub={t('hero.f2.d')} className="right-0 top-[44%] sm:-right-4" />
-            <FloatCard Icon={MonitorCheck} title={t('hero.f3.t')} sub={t('hero.f3.d')} className="bottom-[8%] left-[2%] sm:-left-4" />
           </div>
         </div>
       </section>
