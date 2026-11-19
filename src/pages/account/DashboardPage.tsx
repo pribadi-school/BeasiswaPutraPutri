@@ -30,7 +30,6 @@ export function DashboardPage() {
     return (
       <div className="space-y-5">
         <WelcomeBanner eyebrow={today(lang)} title={t('dash.welcomeNew')} subtitle={me.canEdit ? t('dash.subNew') : undefined} />
-        <ScholarshipInfo openFirst={false} />
         {!me.canEdit ? <ErrorBox>{t('e.CLOSED')}</ErrorBox> : (
           <>
             <div>
@@ -62,6 +61,7 @@ export function DashboardPage() {
             />
           </>
         )}
+        <ScholarshipInfo openFirst={false} />
       </div>
     );
   }
