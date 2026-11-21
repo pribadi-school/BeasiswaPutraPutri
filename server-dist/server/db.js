@@ -52,7 +52,7 @@ export async function migrate(pool, schemaPath) {
             const fresh = defaultStages();
             let changed = false;
             for (const [k, old] of Object.entries(OLD_STAGE_INFO)) {
-                if (stages[k]?.info?.id === old) {
+                if (old.includes(stages[k]?.info?.id) && stages[k].info.id !== fresh[k].info.id) {
                     stages[k].info = fresh[k].info;
                     changed = true;
                 }
