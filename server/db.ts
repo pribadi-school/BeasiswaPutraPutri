@@ -60,8 +60,8 @@ export async function migrate(pool: Pool, schemaPath: string): Promise<void> {
       const stages = JSON.parse(row.stages);
       const fresh = defaultStages();
       let changed = false;
-      for (const [k, old] of Object.entries(OLD_STAGE_INFO) as [keyof typeof fresh, string][]) {
-        if (stages[k]?.info?.id === old) { stages[k].info = fresh[k].info; changed = true; }
+      for (const [k, old] of Object.entries(OLD_STAGE_INFO) as [keyof typeof fresh, string[]][]) {
+        if (old.includes(stages[k]?.info?.id) && stages[k].info.id !== fresh[k].info.id) { stages[k].info = fresh[k].info; changed = true; }
       }
       if (changed) await conn.query('UPDATE settings SET stages = ? WHERE id = 1', [JSON.stringify(stages)]);
     }

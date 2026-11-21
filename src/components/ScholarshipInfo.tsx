@@ -21,8 +21,8 @@ const C = {
     scheduleT: 'Jadwal & tahapan seleksi',
     schedule: [
       ['Pendaftaran', 'Sampai 26 Desember 2026', 'Formulir dan dokumen diserahkan lewat situs ini. Panitia memeriksa formulir dan kelengkapan dokumen (seleksi administrasi).'],
-      ['Tes akademik', '9 Januari 2027', 'Online di latihan.id. Bahasa Inggris, Matematika, dan tes IQ dengan nilai minimum.'],
-      ['Wawancara', '16 Januari 2027', 'Di Pribadi School. Menggali motivasi, karakter, dan kesiapan siswa.'],
+      ['Tes akademik', '9 Januari 2027', 'Bahasa Inggris, Matematika, dan tes IQ dengan nilai minimum.'],
+      ['Wawancara', '16 Januari 2027', 'Siswa yang lulus tes akademik akan diwawancarai oleh pihak sekolah di Pribadi School.'],
       ['Pengumuman', '20 Januari 2027', 'Lewat situs ini, website resmi, dan media sosial sekolah.'],
     ],
     reqT: 'Persyaratan pendaftar',
@@ -66,8 +66,8 @@ const C = {
     scheduleT: 'Schedule & selection stages',
     schedule: [
       ['Registration', 'Until 26 December 2026', 'Submit the form and documents on this site. The committee checks the form and documents (administrative selection).'],
-      ['Academic test', '9 January 2027', 'Online at latihan.id. English, Mathematics and an IQ test with minimum scores.'],
-      ['Interview', '16 January 2027', 'At Pribadi School. Explores motivation, character and readiness.'],
+      ['Academic test', '9 January 2027', 'English, Mathematics and an IQ test with minimum scores.'],
+      ['Interview', '16 January 2027', 'Students who pass the academic test will be interviewed by the school at Pribadi School.'],
       ['Announcement', '20 January 2027', 'On this site, the official website and the school’s social media.'],
     ],
     reqT: 'Applicant requirements',
